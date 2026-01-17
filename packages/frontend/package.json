@@ -1,0 +1,31 @@
+{
+  "name": "@app/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "build": "env-cmd -f ../../.env next build",
+    "dev": "env-cmd -f ../../.env next dev",
+    "lint": "next lint --dir src",
+    "start": "env-cmd -f ../../.env next start"
+  },
+  "dependencies": {
+    "@app/common": "*",
+    "classnames": "^2.5.1",
+    "mapbox-gl": "^3.1.2",
+    "next": "^16.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "sass": "^1.90.0"
+  },
+  "devDependencies": {
+    "@types/mapbox-gl": "^3.4.1",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.8.3"
+  }
+}
