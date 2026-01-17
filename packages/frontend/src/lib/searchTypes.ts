@@ -1,0 +1,43 @@
+export type ParsedQuery = {
+  searchTerm: string;
+  location?: {
+    area?: string;
+    coordinates?: {
+      latitude?: number;
+      longitude?: number;
+    };
+  };
+  context?: {
+    type?: "restaurant" | "hotel" | "cafe" | "park" | "landmark" | "store" | "other";
+    filters?: {
+      cuisine?: string[];
+      priceRange?: "low" | "medium" | "high" | "luxury";
+      openNow?: boolean;
+      rating?: number;
+      amenities?: string[];
+      distance?: {
+        value: number;
+        unit: "miles" | "kilometers";
+      };
+    };
+  };
+};
+
+export type AiSearchResult = {
+  id?: string;
+  name: string;
+  description?: string;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+  type?:
+    | "place"
+    | "restaurant"
+    | "hotel"
+    | "cafe"
+    | "park"
+    | "landmark"
+    | "store"
+    | "other";
+};

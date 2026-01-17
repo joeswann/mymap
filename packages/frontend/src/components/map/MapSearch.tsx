@@ -4,23 +4,33 @@ import { useState, useEffect, useRef } from "react";
 import mapboxgl from "mapbox-gl";
 import styles from "./MapSearch.module.scss";
 import classNames from "classnames";
+import type { ParsedQuery } from "~/lib/searchTypes";
 
 interface MapSearchProps {
   map: mapboxgl.Map | null;
 }
 
-interface SearchResult {
-  id: string;
-  name: string;
-  description: string;
-  coordinates: [number, number];
-  type: "station" | "location" | "business";
-  rating?: number;
-  price?: number;
-  categories?: string[];
-}
-
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
+type SearchResult =
+  | {
+      id: string;
+      name: string;
+      description: string;
+      coordinates: [number, number];
+      type: "station";
+    }
+  | {
+      id: string;
+      name: string;
+      description: string;
+      coordinates?: [number, number];
+      type: "place";
+    }
+  | {
+      id: string;
+      name: string;
+      description: string;
+      type: "intent";
+    };
 
 export default function MapSearch({ map }: MapSearchProps) {
   const [query, setQuery] = useState("");
@@ -57,34 +67,59 @@ export default function MapSearch({ map }: MapSearchProps) {
     const searchResults: SearchResult[] = [];
 
     try {
-      // Parallel searches
-      const [stationsData, businessesData, geocodingData] = await Promise.all([
-        // Search Underground stations
+      const userLocation = map
+        ? { latitude: map.getCenter().lat, longitude: map.getCenter().lng }
+        : undefined;
+
+      const [stationsData, aiResponse] = await Promise.all([
         fetch("/api/underground/stations").then((r) => r.json()),
-
-        // Search businesses (Foursquare)
-        map
-          ? fetch(
-              `/api/businesses?q=${encodeURIComponent(searchQuery)}&lat=${
-                map.getCenter().lat
-              }&lng=${map.getCenter().lng}&limit=10`
-            ).then((r) => r.json())
-          : Promise.resolve({ results: [] }),
-
-        // Search locations (Mapbox)
         fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
-            searchQuery
-          )}.json?access_token=${MAPBOX_TOKEN}&proximity=-0.1276,51.5074&limit=5&types=poi,place,locality,neighborhood,address`
-        ).then((r) => r.json()),
+          `/api/search?q=${encodeURIComponent(searchQuery)}${
+            userLocation
+              ? `&lat=${userLocation.latitude}&lng=${userLocation.longitude}`
+              : ""
+          }`
+        ),
       ]);
+
+      const aiData = aiResponse.ok
+        ? await aiResponse.json()
+        : { parsedQuery: { searchTerm: searchQuery }, results: [] };
+
+      const parsedQuery = aiData.parsedQuery as ParsedQuery;
+      searchResults.push({
+        id: "intent",
+        name: `Search: ${parsedQuery.searchTerm || searchQuery}`,
+        description: formatParsedQueryDescription(parsedQuery),
+        type: "intent",
+      });
+
+      const effectiveQuery = (parsedQuery.searchTerm || searchQuery).trim();
+      if (!effectiveQuery) {
+        setResults(searchResults);
+        setShowResults(true);
+        return;
+      }
+
+      const aiResults =
+        aiData.results?.map((result: any, index: number) => ({
+          id: result.id || `place-${index}`,
+          name: result.name,
+          description: result.description || "Suggested place",
+          coordinates: result.coordinates
+            ? [result.coordinates.longitude, result.coordinates.latitude]
+            : undefined,
+          type: "place" as const,
+        })) || [];
+
+      searchResults.push(...aiResults);
 
       // Add station results
       const matchingStations = stationsData.features
         ?.filter((feature: any) =>
           feature.properties.name
             .toLowerCase()
-            .includes(searchQuery.toLowerCase())
+            .includes(effectiveQuery.toLowerCase())
         )
         .slice(0, 3)
         .map((feature: any) => ({
@@ -97,36 +132,9 @@ export default function MapSearch({ map }: MapSearchProps) {
 
       searchResults.push(...matchingStations);
 
-      // Add business results
-      const businessResults = businessesData.results
-        ?.slice(0, 5)
-        .map((business: any) => ({
-          id: `business-${business.id}`,
-          name: business.name,
-          description: formatBusinessDescription(business),
-          coordinates: business.coordinates,
-          type: "business" as const,
-          rating: business.rating,
-          price: business.price,
-          categories: business.categories,
-        })) || [];
-
-      searchResults.push(...businessResults);
-
-      // Add location results
-      const locationResults = geocodingData.features
-        ?.slice(0, 3)
-        .map((feature: any) => ({
-          id: `location-${feature.id}`,
-          name: feature.text,
-          description: feature.place_name,
-          coordinates: feature.center,
-          type: "location" as const,
-        })) || [];
-
-      searchResults.push(...locationResults);
-
-      setResults(searchResults.slice(0, 10));
+      const nextResults = searchResults.slice(0, 8);
+      console.log("Map search results:", nextResults);
+      setResults(nextResults);
       setShowResults(true);
     } catch (error) {
       console.error("Search error:", error);
@@ -135,33 +143,61 @@ export default function MapSearch({ map }: MapSearchProps) {
     }
   };
 
-  const formatBusinessDescription = (business: any): string => {
+  const formatParsedQueryDescription = (parsedQuery: ParsedQuery): string => {
     const parts: string[] = [];
+    const { location, context } = parsedQuery;
 
-    if (business.categories?.length > 0) {
-      parts.push(business.categories[0]);
+    if (context?.type) {
+      parts.push(`Type: ${context.type}`);
     }
 
-    if (business.price) {
-      parts.push("$".repeat(business.price));
+    if (location?.area) {
+      parts.push(`Area: ${location.area}`);
+    } else if (location?.coordinates) {
+      parts.push("Near your location");
     }
 
-    if (business.rating) {
-      parts.push(`★ ${business.rating.toFixed(1)}`);
+    if (context?.filters?.priceRange) {
+      parts.push(`Price: ${context.filters.priceRange}`);
     }
 
-    if (business.distance) {
-      const km = (business.distance / 1000).toFixed(1);
-      parts.push(`${km}km`);
+    if (context?.filters?.openNow) {
+      parts.push("Open now");
     }
 
-    return parts.join(" · ") || business.address;
+    if (context?.filters?.rating) {
+      parts.push(`Rating: ${context.filters.rating}+`);
+    }
+
+    if (context?.filters?.cuisine?.length) {
+      parts.push(`Cuisine: ${context.filters.cuisine.join(", ")}`);
+    }
+
+    if (context?.filters?.amenities?.length) {
+      parts.push(`Amenities: ${context.filters.amenities.join(", ")}`);
+    }
+
+    if (context?.filters?.distance) {
+      parts.push(
+        `Within ${context.filters.distance.value} ${context.filters.distance.unit}`
+      );
+    }
+
+    return parts.length > 0 ? parts.join(" · ") : "No filters detected";
   };
 
   const handleSelectResult = (result: SearchResult) => {
     if (!map) return;
+    if (result.type === "intent") {
+      setShowResults(false);
+      return;
+    }
+    if (!result.coordinates) {
+      setShowResults(false);
+      return;
+    }
 
-    const zoom = result.type === "station" ? 15 : result.type === "business" ? 16 : 14;
+    const zoom = 15;
 
     map.flyTo({
       center: result.coordinates,
@@ -169,19 +205,17 @@ export default function MapSearch({ map }: MapSearchProps) {
       duration: 1500,
     });
 
-    setQuery("");
-    setResults([]);
-    setShowResults(false);
+    setShowResults(true);
   };
 
   const getResultIcon = (type: string): string => {
     switch (type) {
       case "station":
         return "🚇";
-      case "business":
-        return "🏪";
-      case "location":
-        return "📍";
+      case "place":
+        return "🧭";
+      case "intent":
+        return "✨";
       default:
         return "📍";
     }
@@ -194,7 +228,7 @@ export default function MapSearch({ map }: MapSearchProps) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search businesses, stations & locations..."
+          placeholder="Search the map in plain English..."
           className={styles.input}
           onFocus={() => query.length >= 2 && setShowResults(true)}
         />
@@ -213,7 +247,8 @@ export default function MapSearch({ map }: MapSearchProps) {
                 <span
                   className={classNames(styles.icon, {
                     [styles.station]: result.type === "station",
-                    [styles.business]: result.type === "business",
+                    [styles.intent]: result.type === "intent",
+                    [styles.place]: result.type === "place",
                   })}
                 >
                   {getResultIcon(result.type)}

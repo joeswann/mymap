@@ -17,9 +17,11 @@
     "classnames": "^2.5.1",
     "mapbox-gl": "^3.1.2",
     "next": "^16.1.1",
+    "openai": "^4.103.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "sass": "^1.90.0"
+    "sass": "^1.90.0",
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "@types/mapbox-gl": "^3.4.1",
