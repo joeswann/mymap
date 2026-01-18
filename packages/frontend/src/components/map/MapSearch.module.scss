@@ -45,17 +45,17 @@
   right: $spacing-md;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 16px;
-  animation: pulse 1s ease-in-out infinite;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
 }
 
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
+@keyframes spin {
+  to {
+    transform: translateY(-50%) rotate(360deg);
   }
 }
 
@@ -193,6 +193,42 @@
   gap: $spacing-xs;
 }
 
+.infoHeader {
+  position: relative;
+  padding-right: 0;
+}
+
+.infoPager {
+  position: absolute;
+  bottom: $spacing-sm;
+  right: $spacing-sm;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: $color-text-tertiary;
+  font-size: 11px;
+  z-index: 1;
+}
+
+.pagerButton {
+  border: none;
+  background: transparent;
+  color: $color-text-tertiary;
+  font-size: 14px;
+  padding: 0;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.pagerCount {
+  min-width: 32px;
+  text-align: center;
+}
+
 .infoTitle {
   font-size: 16px;
   font-weight: 600;
@@ -226,16 +262,10 @@
 
 .infoSources {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 11px;
-  color: $color-text-tertiary;
-}
-
-.infoSourceList {
-  display: flex;
   flex-wrap: wrap;
   gap: $spacing-xs;
+  font-size: 11px;
+  color: $color-text-tertiary;
 
   a {
     color: $color-text-secondary;
@@ -245,4 +275,12 @@
       color: $color-text-primary;
     }
   }
+}
+
+:global(.search-marker) {
+  transition: filter 150ms ease;
+}
+
+:global(.search-marker.marker-selected) {
+  filter: brightness(1.25) saturate(1.1);
 }

@@ -4,38 +4,17 @@ export interface Coordinates {
   longitude: number;
 }
 
-export interface Viewbox {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-}
-
 interface NominatimResult {
   lat: string;
   lon: string;
 }
 
-/**
- * Calculate a geographic bounding box around a location for search purposes
- * Default radius: 10km
- */
-export function getViewbox(userLocation: Coordinates): Viewbox {
-  const latDelta = 10 / 111; // ~10km in latitude degrees
-  const lngDelta =
-    10 / (111 * Math.cos((userLocation.latitude * Math.PI) / 180)); // ~10km in longitude degrees
-
-  return {
-    left: userLocation.longitude - lngDelta,
-    right: userLocation.longitude + lngDelta,
-    top: userLocation.latitude + latDelta,
-    bottom: userLocation.latitude - latDelta,
-  };
+interface NominatimReverseResult {
+  display_name?: string;
 }
 
 /**
  * Geocode an address to coordinates using OpenStreetMap's Nominatim API
- * Optionally restricts search to a viewbox around a user location
  */
 export async function geocodeAddress(
   address: string,
@@ -46,15 +25,6 @@ export async function geocodeAddress(
   url.searchParams.set("limit", "1");
   url.searchParams.set("q", address);
 
-  if (userLocation) {
-    const viewbox = getViewbox(userLocation);
-    url.searchParams.set(
-      "viewbox",
-      `${viewbox.left},${viewbox.top},${viewbox.right},${viewbox.bottom}`
-    );
-    url.searchParams.set("bounded", "1");
-  }
-
   const response = await fetch(url.toString(), {
     headers: {
       "User-Agent": "map-search/1.0 (local-dev)",
@@ -64,12 +34,19 @@ export async function geocodeAddress(
   if (!response.ok) {
     if (process.env.NODE_ENV !== "production") {
       const bodyText = await response.text().catch(() => "");
-      console.log("Geocode error response:", {
-        status: response.status,
-        statusText: response.statusText,
-        body: bodyText,
-        address,
-      });
+      console.log(
+        "Geocode error response:",
+        JSON.stringify(
+          {
+            status: response.status,
+            statusText: response.statusText,
+            body: bodyText,
+            address,
+          },
+          null,
+          2
+        )
+      );
     }
     return null;
   }
@@ -81,6 +58,47 @@ export async function geocodeAddress(
   }
 
   return { latitude: Number(data[0].lat), longitude: Number(data[0].lon) };
+}
+
+/**
+ * Reverse geocode coordinates to a displayable address.
+ */
+export async function reverseGeocodeAddress(
+  location: Coordinates
+): Promise<string | null> {
+  const url = new URL("https://nominatim.openstreetmap.org/reverse");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("lat", location.latitude.toString());
+  url.searchParams.set("lon", location.longitude.toString());
+  url.searchParams.set("zoom", "16");
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "User-Agent": "map-search/1.0 (local-dev)",
+    },
+  });
+
+  if (!response.ok) {
+    if (process.env.NODE_ENV !== "production") {
+      const bodyText = await response.text().catch(() => "");
+      console.log(
+        "Reverse geocode error response:",
+        JSON.stringify(
+          {
+            status: response.status,
+            statusText: response.statusText,
+            body: bodyText,
+          },
+          null,
+          2
+        )
+      );
+    }
+    return null;
+  }
+
+  const data = (await response.json()) as NominatimReverseResult;
+  return data.display_name || null;
 }
 
 /**

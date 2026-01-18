@@ -6,7 +6,7 @@ import {
   normalizeGeminiPayload,
   SEARCH_RADIUS_KM,
 } from "~/lib/gemini";
-import { geocodeAddress, getDistanceKm } from "~/lib/geocoding";
+import { geocodeAddress, getDistanceKm, reverseGeocodeAddress } from "~/lib/geocoding";
 import { RESULT_LIMIT } from "~/lib/constants";
 
 /**
@@ -41,6 +41,9 @@ export async function GET(request: Request) {
 
   const userLocation =
     lat && lng ? { latitude: Number(lat), longitude: Number(lng) } : undefined;
+  const userLocationAddress = userLocation
+    ? await reverseGeocodeAddress(userLocation)
+    : null;
 
   // Return fallback if Gemini API key is not configured
   if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
@@ -52,6 +55,7 @@ export async function GET(request: Request) {
     const geminiResponse = await callGeminiTool({
       query,
       userLocation,
+      userLocationAddress: userLocationAddress || undefined,
     });
 
     // Extract and parse response
@@ -64,12 +68,15 @@ export async function GET(request: Request) {
         parsedArgs = JSON.parse(textPart);
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
-          console.log("Gemini raw text:", textPart);
+          console.log("Gemini raw text:", JSON.stringify(textPart, null, 2));
         }
         throw error;
       }
     } else if (process.env.NODE_ENV !== "production") {
-      console.log("Gemini response missing text part:", parts);
+      console.log(
+        "Gemini response missing text part:",
+        JSON.stringify(parts, null, 2)
+      );
     }
 
     if (!parsedArgs) {
@@ -78,8 +85,8 @@ export async function GET(request: Request) {
 
     // Log in development
     if (process.env.NODE_ENV !== "production") {
-      console.log("Gemini raw response:", geminiResponse);
-      console.log("Gemini parsed args:", parsedArgs);
+      console.log("Gemini raw response:", JSON.stringify(geminiResponse, null, 2));
+      console.log("Gemini parsed args:", JSON.stringify(parsedArgs, null, 2));
     }
 
     // Normalize the response to a consistent format
@@ -93,7 +100,10 @@ export async function GET(request: Request) {
     const validation = SearchResponseSchema.safeParse(normalizedArgs);
     if (!validation.success) {
       if (process.env.NODE_ENV !== "production") {
-        console.log("Gemini normalized args:", normalizedArgs);
+        console.log(
+          "Gemini normalized args:",
+          JSON.stringify(normalizedArgs, null, 2)
+        );
       }
       console.warn("Search tool validation errors:", validation.error.format());
       return NextResponse.json(buildFallback(query, userLocation));
@@ -148,6 +158,20 @@ export async function GET(request: Request) {
 
     // Filter results by distance if user location is provided
     if (userLocation) {
+      if (process.env.NODE_ENV !== "production") {
+        const distances = normalized.results
+          .filter((result) => result.coordinates)
+          .map((result) => ({
+            name: result.name,
+            distanceKm: Number(
+              getDistanceKm(userLocation, result.coordinates!).toFixed(2)
+            ),
+          }));
+        console.log(
+          "Distances before filter:",
+          JSON.stringify(distances, null, 2)
+        );
+      }
       normalized.results = normalized.results.filter((result) => {
         if (!result.coordinates) return false;
         const distance = getDistanceKm(userLocation, result.coordinates);

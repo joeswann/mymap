@@ -40,6 +40,7 @@ export const ParsedQuerySchema = z.object({
             })
             .optional(),
         })
+        .catchall(z.any())
         .optional(),
     })
     .optional(),
@@ -53,6 +54,7 @@ export const AiResultSchema = z.object({
   address: z.string().optional(),
   photoUrl: z.string().optional(),
   rating: z.number().min(0).max(5).optional(),
+  priceRange: z.enum(["low", "medium", "high", "luxury"]).optional(),
   website: z.string().optional(),
   phone: z.string().optional(),
   sources: z.array(z.string()).optional(),

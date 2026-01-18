@@ -18,9 +18,14 @@ import { createLineFilter, createStationFilter } from "~/lib/mapbox/filters";
 interface MapViewProps {
   visibleLines: Record<string, boolean>;
   onMapLoad?: (map: mapboxgl.Map) => void;
+  onLocationChange?: (location: { latitude: number; longitude: number } | null) => void;
 }
 
-export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
+export default function MapView({
+  visibleLines,
+  onMapLoad,
+  onLocationChange,
+}: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const mapLoaded = useRef(false);
@@ -133,6 +138,11 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
       userMarker.current.setLngLat(coordinates);
     }
   }, [userLocation]);
+
+  useEffect(() => {
+    if (!onLocationChange) return;
+    onLocationChange(userLocation);
+  }, [onLocationChange, userLocation]);
 
   // Update filters when visible lines change
   useEffect(() => {

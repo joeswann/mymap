@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import type mapboxgl from "mapbox-gl";
+import mapboxgl from "mapbox-gl";
 import styles from "./MapSearch.module.scss";
 import classNames from "classnames";
 import type { SearchResult } from "~/lib/searchTypes";
@@ -10,16 +10,19 @@ import { formatParsedQueryDescription, getResultIcon } from "~/lib/searchHelpers
 import { createMarkers, clearMarkers } from "~/lib/mapbox/markers";
 import { RESULT_LIMIT } from "~/lib/constants";
 import type { TflStationFeature } from "~/lib/tflTypes";
+import { getDistanceKm } from "~/lib/geocoding";
 
 interface MapSearchProps {
   map: mapboxgl.Map | null;
+  userLocation?: { latitude: number; longitude: number } | null;
 }
 
-export default function MapSearch({ map }: MapSearchProps) {
+export default function MapSearch({ map, userLocation }: MapSearchProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [intentResult, setIntentResult] = useState<SearchResult | null>(null);
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+  const [photoFailed, setPhotoFailed] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const markersRef = useRef<any[]>([]); // Use any[] for mapbox markers
@@ -41,6 +44,7 @@ export default function MapSearch({ map }: MapSearchProps) {
     markersRef.current = createMarkers(map, results, (result) => {
       if (result.type === "place") {
         setSelectedResult(result);
+        setShowResults(false);
       }
     });
 
@@ -49,6 +53,18 @@ export default function MapSearch({ map }: MapSearchProps) {
       markersRef.current = [];
     };
   }, [map, results]);
+
+  useEffect(() => {
+    markersRef.current.forEach((marker) => {
+      const el = marker.getElement();
+      if (!el.dataset.resultId) return;
+      if (selectedResult && el.dataset.resultId === selectedResult.id) {
+        el.classList.add("marker-selected");
+      } else {
+        el.classList.remove("marker-selected");
+      }
+    });
+  }, [selectedResult, results]);
 
   /**
    * Perform search using both AI and station search
@@ -96,6 +112,7 @@ export default function MapSearch({ map }: MapSearchProps) {
         address: result.address,
         photoUrl: result.photoUrl,
         rating: result.rating,
+        priceRange: result.priceRange,
         website: result.website,
         phone: result.phone,
         sources: result.sources,
@@ -135,6 +152,7 @@ export default function MapSearch({ map }: MapSearchProps) {
       setResults(nextResults);
       setSelectedResult(null);
       setShowResults(true);
+      fitMapToResults(nextResults);
 
       if (nextResults.length > 0) {
         cacheRef.current.set(cacheKey, {
@@ -174,8 +192,12 @@ export default function MapSearch({ map }: MapSearchProps) {
     } else {
       setSelectedResult(null);
     }
-    setShowResults(true);
+    setShowResults(false);
   };
+
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [selectedResult?.id]);
 
   return (
     <div className={styles.search}>
@@ -246,10 +268,17 @@ export default function MapSearch({ map }: MapSearchProps) {
             if (results.length > 0 || intentResult || isSearching) {
               setShowResults(true);
             }
+            setSelectedResult(null);
+          }}
+          onClick={() => {
+            if (results.length > 0 || intentResult || isSearching) {
+              setShowResults(true);
+            }
+            setSelectedResult(null);
           }}
           aria-label="Search the map"
         />
-        {isSearching && <div className={styles.spinner}>⏳</div>}
+        {isSearching && <div className={styles.spinner} aria-hidden="true" />}
       </form>
 
       {showResults && (
@@ -268,29 +297,48 @@ export default function MapSearch({ map }: MapSearchProps) {
                 </div>
               </div>
             )}
-            {results.map((result) => (
-              <button
-                key={result.id}
-                className={styles.result}
-                onClick={() => handleSelectResult(result)}
-                type="button"
-              >
-                <span
-                  className={classNames(styles.icon, {
-                    [styles.station]: result.type === "station",
-                    [styles.place]: result.type === "place",
-                  })}
+            {results.map((result) => {
+              const distanceKm =
+                userLocation && result.coordinates
+                  ? getDistanceKm(userLocation, {
+                      latitude: result.coordinates[1],
+                      longitude: result.coordinates[0],
+                    })
+                  : null;
+              const distanceText =
+                distanceKm !== null ? `${distanceKm.toFixed(1)} km` : "";
+              const descriptionText = result.description
+                ? distanceText
+                  ? `${result.description} · ${distanceText}`
+                  : result.description
+                : distanceText;
+
+              return (
+                <button
+                  key={result.id}
+                  className={styles.result}
+                  onClick={() => handleSelectResult(result)}
+                  type="button"
                 >
-                  {getResultIcon(result.type)}
-                </span>
-                <div className={styles.resultContent}>
-                  <div className={styles.resultName}>{result.name}</div>
-                  <div className={styles.resultDescription}>
-                    {result.description}
+                  <span
+                    className={classNames(styles.icon, {
+                      [styles.station]: result.type === "station",
+                      [styles.place]: result.type === "place",
+                    })}
+                  >
+                    {getResultIcon(result.type)}
+                  </span>
+                  <div className={styles.resultContent}>
+                    <div className={styles.resultName}>{result.name}</div>
+                    {descriptionText && (
+                      <div className={styles.resultDescription}>
+                        {descriptionText}
+                      </div>
+                    )}
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
             {!isSearching &&
               results.length === 0 &&
               emptyStateQueryRef.current === query.trim().toLowerCase() && (
@@ -313,23 +361,51 @@ export default function MapSearch({ map }: MapSearchProps) {
 
       {selectedResult?.type === "place" && (
         <div className={styles.infoCard}>
-          {selectedResult.photoUrl && (
+          {selectedResult.photoUrl && !photoFailed && (
             <div className={styles.infoPhotoWrap}>
               <img
                 src={selectedResult.photoUrl}
                 alt={selectedResult.name}
                 className={styles.infoPhoto}
+                onError={() => setPhotoFailed(true)}
               />
             </div>
           )}
           <div className={styles.infoBody}>
-            <div className={styles.infoTitle}>{selectedResult.name}</div>
+            <div className={styles.infoHeader}>
+              <div className={styles.infoTitle}>{selectedResult.name}</div>
+            </div>
             {selectedResult.address && (
               <div className={styles.infoMeta}>{selectedResult.address}</div>
             )}
-            {typeof selectedResult.rating === "number" && (
+            {(typeof selectedResult.rating === "number" ||
+              selectedResult.priceRange ||
+              (userLocation && selectedResult.coordinates)) && (
               <div className={styles.infoMeta}>
-                Rating: {selectedResult.rating.toFixed(1)} / 5
+                {typeof selectedResult.rating === "number" && (
+                  <span>
+                    Rating: {selectedResult.rating.toFixed(1)} / 5
+                  </span>
+                )}
+                {selectedResult.priceRange && (
+                  <span>
+                    {typeof selectedResult.rating === "number" ? " · " : ""}
+                    Price: {selectedResult.priceRange}
+                  </span>
+                )}
+                {userLocation && selectedResult.coordinates && (
+                  <span>
+                    {(typeof selectedResult.rating === "number" ||
+                    selectedResult.priceRange)
+                      ? " · "
+                      : ""}
+                    {getDistanceKm(userLocation, {
+                      latitude: selectedResult.coordinates[1],
+                      longitude: selectedResult.coordinates[0],
+                    }).toFixed(1)}
+                    km
+                  </span>
+                )}
               </div>
             )}
             {selectedResult.description && (
@@ -340,7 +416,11 @@ export default function MapSearch({ map }: MapSearchProps) {
             <div className={styles.infoLinks}>
               {selectedResult.website && (
                 <a
-                  href={selectedResult.website}
+                  href={
+                    /^https?:\/\//i.test(selectedResult.website)
+                      ? selectedResult.website
+                      : `https://${selectedResult.website}`
+                  }
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -353,30 +433,101 @@ export default function MapSearch({ map }: MapSearchProps) {
             </div>
             {selectedResult.sources && selectedResult.sources.length > 0 && (
               <div className={styles.infoSources}>
-                <span>Sources:</span>
-                <div className={styles.infoSourceList}>
-                  {selectedResult.sources.map((source, index) => {
-                    const trimmed = source.trim();
-                    const isUrl = /^https?:\/\//i.test(trimmed);
-                    return isUrl ? (
-                      <a
-                        key={`${trimmed}-${index}`}
-                        href={trimmed}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {new URL(trimmed).hostname}
-                      </a>
-                    ) : (
-                      <span key={`${trimmed}-${index}`}>{trimmed}</span>
-                    );
-                  })}
-                </div>
+                {selectedResult.sources.map((source, index) => {
+                  const trimmed = source.trim();
+                  let label = trimmed;
+                  let href = trimmed;
+                  if (trimmed.includes("|")) {
+                    const [name, url] = trimmed
+                      .split("|", 2)
+                      .map((part) => part.trim());
+                    label = name || trimmed;
+                    href = url || trimmed;
+                  } else if (trimmed.includes(" - ")) {
+                    const [name, url] = trimmed
+                      .split(" - ", 2)
+                      .map((part) => part.trim());
+                    label = name || trimmed;
+                    href = url || trimmed;
+                  }
+                  if (!/^https?:\/\//i.test(href)) {
+                    href = `https://${href}`;
+                  }
+                  return (
+                    <a
+                      key={`${trimmed}-${index}`}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {label}
+                    </a>
+                  );
+                })}
               </div>
             )}
+            {(() => {
+              const placeResults = results.filter(
+                (result) => result.type === "place"
+              );
+              const currentIndex = placeResults.findIndex(
+                (result) => result.id === selectedResult.id
+              );
+              const total = placeResults.length;
+              if (total <= 1 || currentIndex === -1) {
+                return null;
+              }
+              const goToIndex = (nextIndex: number) => {
+                const next = placeResults[nextIndex];
+                if (!next || !next.coordinates) return;
+                handleSelectResult(next);
+              };
+              return (
+                <div className={styles.infoPager}>
+                  <button
+                    type="button"
+                    className={styles.pagerButton}
+                    onClick={() => goToIndex(currentIndex - 1)}
+                    disabled={currentIndex === 0}
+                    aria-label="Previous result"
+                  >
+                    ‹
+                  </button>
+                  <span className={styles.pagerCount}>
+                    {currentIndex + 1}/{total}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.pagerButton}
+                    onClick={() => goToIndex(currentIndex + 1)}
+                    disabled={currentIndex === total - 1}
+                    aria-label="Next result"
+                  >
+                    ›
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
     </div>
   );
+
+  function fitMapToResults(nextResults: SearchResult[]) {
+    if (!map) return;
+    const coords = nextResults
+      .map((result) => result.coordinates)
+      .filter((value): value is [number, number] => Array.isArray(value));
+    if (coords.length === 0) return;
+    if (coords.length === 1) {
+      map.flyTo({ center: coords[0], zoom: 14, duration: 900 });
+      return;
+    }
+    const bounds = coords.reduce(
+      (acc, coord) => acc.extend(coord),
+      new mapboxgl.LngLatBounds(coords[0], coords[0])
+    );
+    map.fitBounds(bounds, { padding: 80, duration: 900, maxZoom: 15 });
+  }
 }

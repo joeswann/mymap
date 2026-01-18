@@ -36,7 +36,11 @@ export function createMarkers(
       .addTo(map);
 
     if (onSelect) {
-      marker.getElement().addEventListener("click", () => onSelect(result));
+      const markerEl = marker.getElement();
+      markerEl.classList.add("search-marker");
+      markerEl.dataset.resultId = result.id;
+      markerEl.style.cursor = "pointer";
+      markerEl.addEventListener("click", () => onSelect(result));
     }
 
     markers.push(marker);

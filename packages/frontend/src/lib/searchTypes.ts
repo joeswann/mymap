@@ -15,7 +15,7 @@ export type ParsedQuery = {
         value: number;
         unit: "miles" | "kilometers";
       };
-    };
+    } & Record<string, unknown>;
   };
 };
 
@@ -26,6 +26,7 @@ export type AiSearchResult = {
   address?: string;
   photoUrl?: string;
   rating?: number;
+  priceRange?: "low" | "medium" | "high" | "luxury";
   website?: string;
   phone?: string;
   sources?: string[];
@@ -56,16 +57,17 @@ export type SearchResult =
   | {
       id: string;
       name: string;
-      description: string;
-      coordinates?: [number, number];
-      type: "place";
-      address?: string;
-      photoUrl?: string;
-      rating?: number;
-      website?: string;
-      phone?: string;
-      sources?: string[];
-    }
+    description: string;
+    coordinates?: [number, number];
+    type: "place";
+    address?: string;
+    photoUrl?: string;
+    rating?: number;
+    priceRange?: "low" | "medium" | "high" | "luxury";
+    website?: string;
+    phone?: string;
+    sources?: string[];
+  }
   | {
       id: string;
       name: string;

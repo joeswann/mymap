@@ -40,12 +40,21 @@ Guidelines:
 - Use the viewport center as the reference and keep results within ~10km.
 - Include a street address or full place address for every result.
 - Include a short description, rating (0-5), website, phone, and a photo URL if available.
+- If available, include a priceRange as one of: low, medium, high, luxury.
+- Only include photoUrl values that are publicly accessible direct image URLs.
 - If you cite an address, include sources (URLs or names like "reddit") when known.
+- Favor broader coverage by checking sources like Reddit threads, forums, and community reviews when relevant.
 - Do not include coordinates; the server will geocode addresses.
 - Use the viewport center only for relevance; do not include it in output.
 - Keep descriptions concise and useful (1 sentence).
 - Respond with ONLY valid JSON that matches the tool schema exactly.
 - Use camelCase keys only (e.g., "photoUrl", "parsedQuery", "searchTerm").
+- For sources, use "Name | URL" format when possible (e.g., "Reddit | https://reddit.com/...").
+- Prefer recent, stable sources and avoid outdated or dead links.
+- Ensure any website/source links are valid, fully qualified URLs.
+- Do not use keys like "searchIntent" or "suggestedPlaces"; use "parsedQuery" and "results".
+- Output shape example:
+  {"parsedQuery":{"searchTerm":"jeans","context":{"filters":{"category":"clothing store"}}},"results":[{"name":"Example Store","address":"1 High St, London","description":"Short description.","rating":4.2,"website":"https://example.com","phone":"+44 20 0000 0000","photoUrl":"https://example.com/photo.jpg","sources":["google"]}]}
 `;
 
 // Gemini tool schema
@@ -124,6 +133,10 @@ export const TOOL_SCHEMA = {
             address: { type: "STRING" },
             photoUrl: { type: "STRING" },
             rating: { type: "NUMBER" },
+            priceRange: {
+              type: "STRING",
+              enum: ["low", "medium", "high", "luxury"],
+            },
             website: { type: "STRING" },
             phone: { type: "STRING" },
             sources: { type: "ARRAY", items: { type: "STRING" } },
@@ -153,6 +166,7 @@ export const TOOL_SCHEMA = {
 export async function callGeminiTool(payload: {
   query: string;
   userLocation?: { latitude: number; longitude: number };
+  userLocationAddress?: string;
 }): Promise<GeminiResponse | null> {
   const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) {
@@ -165,6 +179,9 @@ export async function callGeminiTool(payload: {
     "",
     "USER QUERY:",
     payload.query,
+    payload.userLocationAddress
+      ? `User location address: ${payload.userLocationAddress}`
+      : "",
     payload.userLocation
       ? `Viewport center: ${payload.userLocation.latitude}, ${payload.userLocation.longitude}`
       : "",
@@ -173,7 +190,7 @@ export async function callGeminiTool(payload: {
     .join("\n");
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -256,6 +273,9 @@ export function normalizeGeminiPayload(
   };
 
   const sourcePlaces = Array.isArray(raw.results) ? raw.results : [];
+  if (!Array.isArray(raw.results) && process.env.NODE_ENV !== "production") {
+    console.log("Gemini response missing results array:", raw);
+  }
 
   // Normalize place results
   const results: AiSearchResult[] = sourcePlaces.map((place, index) => ({
@@ -265,6 +285,7 @@ export function normalizeGeminiPayload(
     address: place.address,
     photoUrl: place.photoUrl,
     rating: typeof place.rating === "number" ? place.rating : undefined,
+    priceRange: place.priceRange,
     website: place.website,
     phone: place.phone,
     sources: Array.isArray(place.sources) ? place.sources : undefined,

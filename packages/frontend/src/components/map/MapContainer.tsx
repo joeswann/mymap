@@ -9,6 +9,10 @@ import styles from "./MapContainer.module.scss";
 
 export default function MapContainer() {
   const [map, setMap] = useState<mapboxgl.Map | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   // Initialize all lines as hidden (user must enable them)
   const [visibleLines, setVisibleLines] = useState<Record<string, boolean>>({});
@@ -22,8 +26,12 @@ export default function MapContainer() {
 
   return (
     <div className={styles.container}>
-      <MapView visibleLines={visibleLines} onMapLoad={setMap} />
-      <MapSearch map={map} />
+      <MapView
+        visibleLines={visibleLines}
+        onMapLoad={setMap}
+        onLocationChange={setUserLocation}
+      />
+      <MapSearch map={map} userLocation={userLocation} />
       <MapSidebar visibleLines={visibleLines} onToggleLine={toggleLine} />
     </div>
   );
