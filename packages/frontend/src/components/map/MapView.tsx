@@ -1,88 +1,50 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import styles from "./MapView.module.scss";
 import { invariant } from "@app/common";
+import { useGeolocation } from "~/hooks/useGeolocation";
+import { fetchUndergroundLines, fetchUndergroundStations } from "~/lib/api";
+import { DEFAULT_CENTER, DEFAULT_ZOOM } from "~/lib/constants";
+import {
+  createLineLayerConfig,
+  createStationCircleConfig,
+  createStationLabelConfig,
+} from "~/lib/mapbox/layers";
+import { createLineFilter, createStationFilter } from "~/lib/mapbox/filters";
 
 interface MapViewProps {
   visibleLines: Record<string, boolean>;
   onMapLoad?: (map: mapboxgl.Map) => void;
 }
 
-// You'll need to get a free Mapbox token from https://mapbox.com
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
-const DEFAULT_CENTER: [number, number] = [-0.1276, 51.5074];
-const DEFAULT_ZOOM = 12;
-
 export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const mapLoaded = useRef(false);
   const userMarker = useRef<mapboxgl.Marker | null>(null);
-  const [userLocation, setUserLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  const dataLoadController = useRef<AbortController | null>(null);
 
-  const requestUserLocation = (shouldFlyTo: boolean) => {
-    if (!navigator.geolocation) {
-      if (shouldFlyTo && map.current) {
-        map.current.flyTo({
-          center: DEFAULT_CENTER,
-          zoom: DEFAULT_ZOOM,
-          duration: 1200,
-        });
-      }
-      return;
-    }
+  // Use geolocation hook
+  const { location: userLocation, requestLocation } = useGeolocation(map);
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const nextLocation = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
-        setUserLocation(nextLocation);
-
-        if (shouldFlyTo && map.current) {
-          map.current.flyTo({
-            center: [nextLocation.longitude, nextLocation.latitude],
-            zoom: DEFAULT_ZOOM,
-            duration: 1200,
-          });
-        }
-      },
-      (error) => {
-        console.warn("Geolocation error:", error);
-        if (shouldFlyTo && map.current) {
-          map.current.flyTo({
-            center: DEFAULT_CENTER,
-            zoom: DEFAULT_ZOOM,
-            duration: 1200,
-          });
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 8000,
-        maximumAge: 60000,
-      }
-    );
-  };
-
+  // Initialize map
   useEffect(() => {
     if (map.current) return; // Initialize map only once
 
     invariant(mapContainer.current, "Map container ref must exist");
-    invariant(MAPBOX_TOKEN, "NEXT_PUBLIC_MAPBOX_TOKEN environment variable must be set");
+    invariant(
+      process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+      "NEXT_PUBLIC_MAPBOX_TOKEN environment variable must be set"
+    );
 
-    mapboxgl.accessToken = MAPBOX_TOKEN;
+    mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/streets-v12",
+      style: "mapbox://styles/mapbox/dark-v11", // Dark mode style
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
     });
@@ -90,89 +52,26 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
     map.current.on("load", () => {
       invariant(map.current, "Map must be initialized");
 
-      // Add London Underground lines layer
+      // Add London Underground lines source and layer
       map.current.addSource("underground-lines", {
         type: "geojson",
         data: {
           type: "FeatureCollection",
-          features: [], // Will be populated with actual data
+          features: [],
         },
       });
+      map.current.addLayer(createLineLayerConfig());
 
-      map.current.addLayer({
-        id: "underground-lines-layer",
-        type: "line",
-        source: "underground-lines",
-        layout: {
-          "line-join": "round",
-          "line-cap": "round",
-        },
-        paint: {
-          "line-color": ["get", "colour"],
-          "line-width": [
-            "interpolate",
-            ["exponential", 1.5],
-            ["zoom"],
-            10, 2,
-            14, 4,
-            18, 8
-          ],
-          "line-opacity": 0.9,
-        },
-      });
-
-      // Add London Underground stations layer
+      // Add London Underground stations source and layers
       map.current.addSource("underground-stations", {
         type: "geojson",
         data: {
           type: "FeatureCollection",
-          features: [], // Will be populated with actual data
+          features: [],
         },
       });
-
-      map.current.addLayer({
-        id: "underground-stations-layer",
-        type: "circle",
-        source: "underground-stations",
-        paint: {
-          "circle-radius": [
-            "interpolate",
-            ["exponential", 1.5],
-            ["zoom"],
-            10, 2,
-            14, 4,
-            18, 6
-          ],
-          "circle-color": "#fff",
-          "circle-stroke-width": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            10, 1,
-            14, 1.5,
-            18, 2
-          ],
-          "circle-stroke-color": "#000",
-        },
-      });
-
-      map.current.addLayer({
-        id: "underground-stations-labels",
-        type: "symbol",
-        source: "underground-stations",
-        layout: {
-          "text-field": ["get", "displayName"],
-          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
-          "text-size": 11,
-          "text-offset": [0, 1.5],
-          "text-anchor": "top",
-        },
-        paint: {
-          "text-color": "#000",
-          "text-halo-color": "#fff",
-          "text-halo-width": 2,
-        },
-      });
+      map.current.addLayer(createStationCircleConfig());
+      map.current.addLayer(createStationLabelConfig());
 
       // Mark map as loaded
       mapLoaded.current = true;
@@ -182,18 +81,26 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
         onMapLoad(map.current);
       }
 
-      // Load TfL data (in next step)
-      loadUndergroundData(map.current);
+      // Load TfL data
+      dataLoadController.current?.abort();
+      dataLoadController.current = new AbortController();
+      loadUndergroundData(map.current, dataLoadController.current.signal);
 
       // Request user location and center map if available
-      requestUserLocation(true);
+      requestLocation(true);
     });
 
     return () => {
+      dataLoadController.current?.abort();
+      dataLoadController.current = null;
+      mapLoaded.current = false;
       map.current?.remove();
+      map.current = null;
+      userMarker.current = null;
     };
-  }, []);
+  }, [onMapLoad, requestLocation]);
 
+  // Update user marker when location changes
   useEffect(() => {
     if (!map.current || !userLocation) return;
 
@@ -213,6 +120,7 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
     }
   }, [userLocation]);
 
+  // Update filters when visible lines change
   useEffect(() => {
     if (!map.current || !mapLoaded.current) return;
 
@@ -221,26 +129,9 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
       .filter(([_, isVisible]) => isVisible)
       .map(([lineName]) => lineName);
 
-    // Create filter expression for lines
-    // Show lines where the "name" property matches any visible line
-    const lineFilter =
-      visibleLineNames.length > 0
-        ? ["in", ["get", "name"], ["literal", visibleLineNames]]
-        : ["==", ["get", "name"], ""];
-
-    // Create filter expression for stations
-    // Show stations where at least one of their lines is visible
-    const stationFilter =
-      visibleLineNames.length > 0
-        ? [
-            "any",
-            ...visibleLineNames.map((lineName) => [
-              "in",
-              lineName,
-              ["get", "lines"],
-            ]),
-          ]
-        : ["==", ["get", "name"], ""];
+    // Create filter expressions
+    const lineFilter = createLineFilter(visibleLineNames);
+    const stationFilter = createStationFilter(visibleLineNames);
 
     // Apply filters to layers
     if (map.current.getLayer("underground-lines-layer")) {
@@ -260,7 +151,7 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
       <button
         type="button"
         className={styles.locateButton}
-        onClick={() => requestUserLocation(true)}
+        onClick={() => requestLocation(true)}
         aria-label="Recenter map to your location"
       >
         Me
@@ -269,15 +160,23 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
   );
 }
 
-async function loadUndergroundData(map: mapboxgl.Map) {
+/**
+ * Load Underground data from API and update map sources
+ */
+async function loadUndergroundData(
+  map: mapboxgl.Map,
+  signal?: AbortSignal
+) {
   try {
-    // Fetch TfL London Underground data
-    // For now, using a simplified sample - in production you'd fetch from TfL API
-    const lines = await fetch("/api/underground/lines").then((r) => r.json());
-    const stations = await fetch("/api/underground/stations").then((r) => r.json());
+    const [lines, stations] = await Promise.all([
+      fetchUndergroundLines(signal),
+      fetchUndergroundStations(signal),
+    ]);
 
     const linesSource = map.getSource("underground-lines") as mapboxgl.GeoJSONSource;
-    const stationsSource = map.getSource("underground-stations") as mapboxgl.GeoJSONSource;
+    const stationsSource = map.getSource(
+      "underground-stations"
+    ) as mapboxgl.GeoJSONSource;
 
     if (linesSource) {
       linesSource.setData(lines);
@@ -287,6 +186,14 @@ async function loadUndergroundData(map: mapboxgl.Map) {
       stationsSource.setData(stations);
     }
   } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "name" in error &&
+      error.name === "AbortError"
+    ) {
+      return;
+    }
     console.error("Failed to load underground data:", error);
   }
 }

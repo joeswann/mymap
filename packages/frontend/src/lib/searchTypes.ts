@@ -42,3 +42,26 @@ export type AiSearchResult = {
     | "store"
     | "other";
 };
+
+// Search Result types (used in MapSearch component)
+export type SearchResult =
+  | {
+      id: string;
+      name: string;
+      description: string;
+      coordinates: [number, number];
+      type: "station";
+    }
+  | {
+      id: string;
+      name: string;
+      description: string;
+      coordinates?: [number, number];
+      type: "place";
+    }
+  | {
+      id: string;
+      name: string;
+      description: string;
+      type: "intent";
+    };

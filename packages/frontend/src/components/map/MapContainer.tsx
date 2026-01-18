@@ -6,21 +6,12 @@ import MapView from "./MapView";
 import MapSidebar from "./MapSidebar";
 import MapSearch from "./MapSearch";
 import styles from "./MapContainer.module.scss";
-import { UNDERGROUND_LINES } from "~/lib/underground";
 
 export default function MapContainer() {
   const [map, setMap] = useState<mapboxgl.Map | null>(null);
 
-  // Initialize all lines as visible
-  const [visibleLines, setVisibleLines] = useState<Record<string, boolean>>(
-    UNDERGROUND_LINES.reduce(
-      (acc, line) => {
-        acc[line] = true;
-        return acc;
-      },
-      {} as Record<string, boolean>
-    )
-  );
+  // Initialize all lines as hidden (user must enable them)
+  const [visibleLines, setVisibleLines] = useState<Record<string, boolean>>({});
 
   const toggleLine = (line: string) => {
     setVisibleLines((prev) => ({

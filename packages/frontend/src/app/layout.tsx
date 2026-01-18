@@ -1,8 +1,12 @@
 import "../styles/app.scss";
-import { Viewport, Metadata } from "next";
+import type { Viewport, Metadata } from "next";
+import type { ReactNode } from "react";
 
-const Layout = async (context: any) => {
-  const { children } = context;
+interface LayoutProps {
+  children: ReactNode;
+}
+
+const Layout = async ({ children }: LayoutProps) => {
 
   return (
     <html lang="en">

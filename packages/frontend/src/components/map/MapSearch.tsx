@@ -1,45 +1,29 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import mapboxgl from "mapbox-gl";
+import type mapboxgl from "mapbox-gl";
 import styles from "./MapSearch.module.scss";
 import classNames from "classnames";
-import type { ParsedQuery } from "~/lib/searchTypes";
+import type { SearchResult } from "~/lib/searchTypes";
+import { fetchUndergroundStations, fetchSearch } from "~/lib/api";
+import { formatParsedQueryDescription, getResultIcon } from "~/lib/searchHelpers";
+import { createMarkers, clearMarkers } from "~/lib/mapbox/markers";
+import { SEARCH_DEBOUNCE_MS, RESULT_LIMIT } from "~/lib/constants";
+import type { TflStationFeature } from "~/lib/tflTypes";
 
 interface MapSearchProps {
   map: mapboxgl.Map | null;
 }
-
-type SearchResult =
-  | {
-      id: string;
-      name: string;
-      description: string;
-      coordinates: [number, number];
-      type: "station";
-    }
-  | {
-      id: string;
-      name: string;
-      description: string;
-      coordinates?: [number, number];
-      type: "place";
-    }
-  | {
-      id: string;
-      name: string;
-      description: string;
-      type: "intent";
-    };
 
 export default function MapSearch({ map }: MapSearchProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const searchTimeout = useRef<NodeJS.Timeout>();
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const searchTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
+  const markersRef = useRef<any[]>([]); // Use any[] for mapbox markers
 
+  // Debounced search effect
   useEffect(() => {
     if (query.length < 2) {
       setResults([]);
@@ -47,14 +31,13 @@ export default function MapSearch({ map }: MapSearchProps) {
       return;
     }
 
-    // Debounce search
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
 
     searchTimeout.current = setTimeout(() => {
       performSearch(query);
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => {
       if (searchTimeout.current) {
@@ -63,35 +46,26 @@ export default function MapSearch({ map }: MapSearchProps) {
     };
   }, [query]);
 
+  // Marker management effect
   useEffect(() => {
     if (!map) return;
 
-    markersRef.current.forEach((marker) => marker.remove());
+    // Clear existing markers
+    clearMarkers(markersRef.current);
     markersRef.current = [];
 
-    results.forEach((result) => {
-      if (result.type === "intent" || !("coordinates" in result)) {
-        return;
-      }
-
-      if (!result.coordinates) {
-        return;
-      }
-
-      const color = result.type === "station" ? "#0ea5e9" : "#7c3aed";
-      const marker = new mapboxgl.Marker({ color })
-        .setLngLat(result.coordinates)
-        .addTo(map);
-
-      markersRef.current.push(marker);
-    });
+    // Create new markers for search results
+    markersRef.current = createMarkers(map, results);
 
     return () => {
-      markersRef.current.forEach((marker) => marker.remove());
+      clearMarkers(markersRef.current);
       markersRef.current = [];
     };
   }, [map, results]);
 
+  /**
+   * Perform search using both AI and station search
+   */
   const performSearch = async (searchQuery: string) => {
     setIsSearching(true);
     const searchResults: SearchResult[] = [];
@@ -101,70 +75,60 @@ export default function MapSearch({ map }: MapSearchProps) {
         ? { latitude: map.getCenter().lat, longitude: map.getCenter().lng }
         : undefined;
 
-      const [stationsData, aiResponse] = await Promise.all([
-        fetch("/api/underground/stations").then((r) => r.json()),
-        fetch(
-          `/api/search?q=${encodeURIComponent(searchQuery)}${
-            userLocation
-              ? `&lat=${userLocation.latitude}&lng=${userLocation.longitude}`
-              : ""
-          }`
-        ),
+      // Fetch both stations and AI search in parallel
+      const [stationsData, aiData] = await Promise.all([
+        fetchUndergroundStations(),
+        fetchSearch(searchQuery, userLocation),
       ]);
 
-      const aiData = aiResponse.ok
-        ? await aiResponse.json()
-        : { parsedQuery: { searchTerm: searchQuery }, results: [] };
-
-      const parsedQuery = aiData.parsedQuery as ParsedQuery;
+      // Add search intent result
       searchResults.push({
         id: "intent",
-        name: `Search: ${parsedQuery.searchTerm || searchQuery}`,
-        description: formatParsedQueryDescription(parsedQuery),
+        name: `Search: ${aiData.parsedQuery.searchTerm || searchQuery}`,
+        description: formatParsedQueryDescription(aiData.parsedQuery),
         type: "intent",
       });
 
-      const effectiveQuery = (parsedQuery.searchTerm || searchQuery).trim();
+      const effectiveQuery = (aiData.parsedQuery.searchTerm || searchQuery).trim();
       if (!effectiveQuery) {
         setResults(searchResults);
         setShowResults(true);
         return;
       }
 
-      const aiResults =
-        aiData.results?.map((result: any, index: number) => ({
-          id: result.id || `place-${index}`,
-          name: result.name,
-          description:
-            result.description || result.address || "Suggested place",
-          coordinates: result.coordinates
-            ? [result.coordinates.longitude, result.coordinates.latitude]
-            : undefined,
-          type: "place" as const,
-        })) || [];
+      // Add AI-suggested places
+      const aiResults: SearchResult[] = aiData.results.map((result, index) => ({
+        id: result.id || `place-${index}`,
+        name: result.name,
+        description: result.description || result.address || "Suggested place",
+        coordinates: result.coordinates
+          ? [result.coordinates.longitude, result.coordinates.latitude]
+          : undefined,
+        type: "place" as const,
+      }));
 
       searchResults.push(...aiResults);
 
-      // Add station results
-      const matchingStations = stationsData.features
-        ?.filter((feature: any) =>
+      // Add matching stations
+      const matchingStations: SearchResult[] = stationsData.features
+        .filter((feature: TflStationFeature) =>
           feature.properties.name
             .toLowerCase()
             .includes(effectiveQuery.toLowerCase())
         )
         .slice(0, 3)
-        .map((feature: any) => ({
+        .map((feature: TflStationFeature) => ({
           id: `station-${feature.properties.id}`,
           name: feature.properties.displayName || feature.properties.name,
           description: `Underground Station · Zone ${feature.properties.zone || "N/A"}`,
-          coordinates: feature.geometry.coordinates,
+          coordinates: feature.geometry.coordinates as [number, number],
           type: "station" as const,
-        })) || [];
+        }));
 
       searchResults.push(...matchingStations);
 
-      const nextResults = searchResults.slice(0, 20);
-      console.log("Map search results:", nextResults);
+      // Limit total results
+      const nextResults = searchResults.slice(0, RESULT_LIMIT);
       setResults(nextResults);
       setShowResults(true);
     } catch (error) {
@@ -174,56 +138,13 @@ export default function MapSearch({ map }: MapSearchProps) {
     }
   };
 
-  const formatParsedQueryDescription = (parsedQuery: ParsedQuery): string => {
-    const parts: string[] = [];
-    const { location, context } = parsedQuery;
-
-    if (context?.type) {
-      parts.push(`Type: ${context.type}`);
-    }
-
-    if (location?.area) {
-      parts.push(`Area: ${location.area}`);
-    } else if (location?.coordinates) {
-      parts.push("Near your location");
-    }
-
-    if (context?.filters?.priceRange) {
-      parts.push(`Price: ${context.filters.priceRange}`);
-    }
-
-    if (context?.filters?.openNow) {
-      parts.push("Open now");
-    }
-
-    if (context?.filters?.rating) {
-      parts.push(`Rating: ${context.filters.rating}+`);
-    }
-
-    if (context?.filters?.cuisine?.length) {
-      parts.push(`Cuisine: ${context.filters.cuisine.join(", ")}`);
-    }
-
-    if (context?.filters?.amenities?.length) {
-      parts.push(`Amenities: ${context.filters.amenities.join(", ")}`);
-    }
-
-    if (context?.filters?.distance) {
-      parts.push(
-        `Within ${context.filters.distance.value} ${context.filters.distance.unit}`
-      );
-    }
-
-    return parts.length > 0 ? parts.join(" · ") : "No filters detected";
-  };
-
+  /**
+   * Handle result selection - fly map to location
+   */
   const handleSelectResult = (result: SearchResult) => {
     if (!map) return;
-    if (result.type === "intent") {
-      setShowResults(false);
-      return;
-    }
-    if (!result.coordinates) {
+
+    if (result.type === "intent" || !result.coordinates) {
       setShowResults(false);
       return;
     }
@@ -239,29 +160,19 @@ export default function MapSearch({ map }: MapSearchProps) {
     setShowResults(true);
   };
 
-  const getResultIcon = (type: string): string => {
-    switch (type) {
-      case "station":
-        return "🚇";
-      case "place":
-        return "🧭";
-      case "intent":
-        return "✨";
-      default:
-        return "📍";
-    }
-  };
-
   return (
     <div className={styles.search}>
       <div className={styles.form}>
         <input
+          id="map-search"
+          name="map-search"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search the map in plain English..."
           className={styles.input}
           onFocus={() => query.length >= 2 && setShowResults(true)}
+          aria-label="Search the map"
         />
         {isSearching && <div className={styles.spinner}>⏳</div>}
       </div>

@@ -1,11 +1,34 @@
 import { NextResponse } from "next/server";
+import type { Feature, FeatureCollection, Point } from "geojson";
 import { isUndergroundLine } from "~/lib/underground";
+import type { TflStationFeature, TflStationCollection } from "~/lib/tflTypes";
 
 // Real TfL data from Oliver O'Brien's repository (CC-By-NC licensed)
 // Source: https://github.com/oobrien/vis/blob/master/tubecreature/data/tfl_stations.json
 // Data originally from OpenStreetMap
 const TFL_STATIONS_URL =
   "https://raw.githubusercontent.com/oobrien/vis/master/tubecreature/data/tfl_stations.json";
+
+// Raw TfL API response types
+interface RawTflLine {
+  name: string;
+}
+
+interface RawTflStation extends Feature<Point> {
+  properties: {
+    id: string;
+    name: string;
+    cartography?: {
+      display?: string;
+    };
+    zone: string | null;
+    lines: RawTflLine[];
+  };
+}
+
+interface RawTflStationResponse extends FeatureCollection<Point> {
+  features: RawTflStation[];
+}
 
 export async function GET() {
   try {
@@ -17,14 +40,14 @@ export async function GET() {
       throw new Error("Failed to fetch TfL stations data");
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as RawTflStationResponse;
 
     // Filter to only London Underground stations
-    const undergroundFeatures = data.features
-      .map((feature: any) => {
+    const undergroundFeatures: TflStationFeature[] = data.features
+      .map((feature: RawTflStation): TflStationFeature | null => {
         // Get Underground lines that serve this station
         const undergroundLines = feature.properties.lines
-          .map((line: any) => line.name)
+          .map((line: RawTflLine) => line.name)
           .filter((name: string) => isUndergroundLine(name));
 
         // Only include stations served by at least one Underground line
@@ -44,12 +67,14 @@ export async function GET() {
           geometry: feature.geometry,
         };
       })
-      .filter(Boolean);
+      .filter((f): f is TflStationFeature => f !== null);
 
-    return NextResponse.json({
+    const result: TflStationCollection = {
       type: "FeatureCollection",
       features: undergroundFeatures,
-    });
+    };
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Error fetching Underground stations:", error);
     return NextResponse.json(
