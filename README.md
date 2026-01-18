@@ -1,95 +1,77 @@
-# London Underground Map
+# mymap
 
-Interactive full-screen map application displaying London with a toggleable London Underground layer.
+Vibe-coded London Underground map with AI-assisted search and place markers.
+
+## Overview
+
+This is a Next.js + Mapbox GL app that visualizes London Underground lines
+and stations, lets you toggle layers, and search for places with Gemini
+powering intent parsing and suggestions.
 
 ## Features
 
-- Full-screen interactive street map
-- London Underground lines and stations overlay
-- Individual line toggles in expandable sidebar
-- **Business search** powered by Foursquare (restaurants, shops, etc.)
-- Station and location search
-- Price filtering ($ to $$$$)
-- Rating display
-- Responsive design
+- Mapbox GL map with user location and animated fly-to
+- Toggle Underground lines and stations
+- Search with Gemini (intent + suggested places) plus station matches
+- Marker highlights and result details
 
 ## Tech Stack
 
-- Next.js 16 (App Router)
-- TypeScript
-- Mapbox GL JS
-- SCSS Modules
-- Yarn workspaces monorepo
+- Next.js 16, React 19, TypeScript
+- Mapbox GL + Sass modules
+- Gemini API + OpenStreetMap Nominatim geocoding
 
-## Setup
+## Getting Started
 
-1. Install dependencies:
-   ```bash
-   yarn install
-   ```
+### Prerequisites
 
-2. Get API keys:
+- Node.js 22.x
+- Yarn 1.22.x
 
-   **Mapbox (required):**
-   - Sign up at https://account.mapbox.com/
-   - Create a new token or use your default public token
+### Install
 
-   **Foursquare (required for business search):**
-   - Sign up at https://location.foursquare.com/developer/
-   - Create a project in Developer Console
-   - Copy your API key
+```sh
+yarn install
+```
 
-   Copy `.env.example` to `.env` and add both tokens
+### Configure
 
-3. Run the development server:
-   ```bash
-   yarn dev
-   ```
+Create a `.env` file (you can copy `.env.example`) and set:
 
-4. Open [http://localhost:3000](http://localhost:3000)
+- `NEXT_PUBLIC_MAPBOX_TOKEN` (required) - Mapbox access token
+- `NEXT_PUBLIC_GEMINI_API_KEY` (optional) - enables AI search results
+
+### Run
+
+```sh
+yarn dev
+```
+
+### Build
+
+```sh
+yarn build
+yarn start
+```
 
 ## Project Structure
 
 ```
-map/
-├── packages/
-│   ├── frontend/          # Next.js 16 app
-│   │   └── src/
-│   │       ├── app/       # App router pages
-│   │       ├── components/
-│   │       │   └── map/   # Map components
-│   │       ├── styles/    # Global styles
-│   │       └── lib/       # Utilities
-│   └── common/            # Shared utilities
-└── package.json           # Root workspace config
+packages/
+  common/        # Shared utilities
+  frontend/      # Next.js app
 ```
-
-## Development
-
-- `yarn dev` - Start development server
-- `yarn build` - Build for production
-- `yarn start` - Start production server
-- `yarn lint` - Run ESLint
 
 ## Data Sources
 
-This application uses real London Underground network data from multiple sources:
+- TfL Underground lines and stations via OSM (see `ATTRIBUTION.md`)
+- Geocoding via OpenStreetMap Nominatim
 
-- **Lines & Stations**: Oliver O'Brien's TfL GeoJSON dataset (CC-By-NC licensed)
-  - GitHub Repository: [oobrien/vis](https://github.com/oobrien/vis)
-  - Original data from OpenStreetMap (ODbL licensed)
-- **Official Colors**: Transport for London brand guidelines
+## Contributing
 
-### Data Attribution
+- Keep changes small and focused
+- Run `yarn lint` before opening a PR
 
-The TfL lines and stations data is:
-- Licensed under CC-By-NC (Creative Commons Attribution-NonCommercial)
-- Originally sourced from OpenStreetMap contributors
-- Compiled and maintained by Oliver O'Brien ([oobrien.com](https://oobrien.com/))
+## License
 
-Additional resources:
-- [TfL Open Data Users](https://tfl.gov.uk/info-for/open-data-users/)
-- [TfL API Portal](https://api-portal.tfl.gov.uk/)
-- [London Datastore](https://data.london.gov.uk/)
-
-The application caches TfL data for 24 hours to minimize external requests.
+See `ATTRIBUTION.md` for data licensing details.
