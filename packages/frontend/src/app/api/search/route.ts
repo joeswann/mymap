@@ -6,7 +6,11 @@ import {
   normalizeGeminiPayload,
   SEARCH_RADIUS_KM,
 } from "~/lib/gemini";
-import { geocodeAddress, getDistanceKm, reverseGeocodeAddress } from "~/lib/geocoding";
+import {
+  geocodeAddress,
+  getDistanceKm,
+  reverseGeocodeAddress,
+} from "~/lib/geocoding";
 import { RESULT_LIMIT } from "~/lib/constants";
 
 /**
@@ -14,7 +18,7 @@ import { RESULT_LIMIT } from "~/lib/constants";
  */
 function buildFallback(
   query: string,
-  userLocation?: { latitude: number; longitude: number }
+  userLocation?: { latitude: number; longitude: number },
 ): { parsedQuery: ParsedQuery; results: AiSearchResult[] } {
   return {
     parsedQuery: {
@@ -75,7 +79,7 @@ export async function GET(request: Request) {
     } else if (process.env.NODE_ENV !== "production") {
       console.log(
         "Gemini response missing text part:",
-        JSON.stringify(parts, null, 2)
+        JSON.stringify(parts, null, 2),
       );
     }
 
@@ -85,7 +89,10 @@ export async function GET(request: Request) {
 
     // Log in development
     if (process.env.NODE_ENV !== "production") {
-      console.log("Gemini raw response:", JSON.stringify(geminiResponse, null, 2));
+      console.log(
+        "Gemini raw response:",
+        JSON.stringify(geminiResponse, null, 2),
+      );
       console.log("Gemini parsed args:", JSON.stringify(parsedArgs, null, 2));
     }
 
@@ -93,7 +100,7 @@ export async function GET(request: Request) {
     const normalizedArgs = normalizeGeminiPayload(
       parsedArgs,
       query,
-      userLocation
+      userLocation,
     );
 
     // Validate with Zod schema
@@ -102,10 +109,11 @@ export async function GET(request: Request) {
       if (process.env.NODE_ENV !== "production") {
         console.log(
           "Gemini normalized args:",
-          JSON.stringify(normalizedArgs, null, 2)
+          JSON.stringify(normalizedArgs, null, 2),
         );
       }
-      console.warn("Search tool validation errors:", validation.error.format());
+      console.warn("Search tool validation errors:", validation.error.message);
+
       return NextResponse.json(buildFallback(query, userLocation));
     }
 
@@ -126,7 +134,7 @@ export async function GET(request: Request) {
     if (process.env.NODE_ENV !== "production") {
       console.log(
         "Search normalized results count:",
-        normalized.results.length
+        normalized.results.length,
       );
     }
 
@@ -146,12 +154,12 @@ export async function GET(request: Request) {
         }
 
         return { ...result, coordinates: coords };
-      })
+      }),
     );
 
     if (process.env.NODE_ENV !== "production") {
       const withCoords = normalized.results.filter(
-        (result) => result.coordinates
+        (result) => result.coordinates,
       ).length;
       console.log("Geocoded results count:", withCoords);
     }
@@ -164,12 +172,12 @@ export async function GET(request: Request) {
           .map((result) => ({
             name: result.name,
             distanceKm: Number(
-              getDistanceKm(userLocation, result.coordinates!).toFixed(2)
+              getDistanceKm(userLocation, result.coordinates!).toFixed(2),
             ),
           }));
         console.log(
           "Distances before filter:",
-          JSON.stringify(distances, null, 2)
+          JSON.stringify(distances, null, 2),
         );
       }
       normalized.results = normalized.results.filter((result) => {
@@ -180,7 +188,7 @@ export async function GET(request: Request) {
       if (process.env.NODE_ENV !== "production") {
         console.log(
           "Results after distance filter:",
-          normalized.results.length
+          normalized.results.length,
         );
       }
     }
