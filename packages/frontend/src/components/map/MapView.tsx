@@ -26,9 +26,14 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
   const mapLoaded = useRef(false);
   const userMarker = useRef<mapboxgl.Marker | null>(null);
   const dataLoadController = useRef<AbortController | null>(null);
+  const visibleLinesRef = useRef(visibleLines);
 
   // Use geolocation hook
   const { location: userLocation, requestLocation } = useGeolocation(map);
+
+  useEffect(() => {
+    visibleLinesRef.current = visibleLines;
+  }, [visibleLines]);
 
   // Initialize map
   useEffect(() => {
@@ -72,6 +77,15 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
       });
       map.current.addLayer(createStationCircleConfig());
       map.current.addLayer(createStationLabelConfig());
+
+      const initialVisibleLineNames = Object.entries(visibleLinesRef.current)
+        .filter(([_, isVisible]) => isVisible)
+        .map(([lineName]) => lineName);
+      const lineFilter = createLineFilter(initialVisibleLineNames);
+      const stationFilter = createStationFilter(initialVisibleLineNames);
+      map.current.setFilter("underground-lines-layer", lineFilter);
+      map.current.setFilter("underground-stations-layer", stationFilter);
+      map.current.setFilter("underground-stations-labels", stationFilter);
 
       // Mark map as loaded
       mapLoaded.current = true;

@@ -3,7 +3,7 @@
   position: absolute;
   top: $spacing-sm;
   left: $spacing-sm;
-  right: $spacing-sm;
+  right: calc($spacing-sm + 56px);
   z-index: $z-search;
 
   @include tablet {

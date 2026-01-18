@@ -15,7 +15,7 @@ export default function MapSidebar({
   onToggleLine,
 }: MapSidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [undergroundExpanded, setUndergroundExpanded] = useState(true);
+  const [undergroundExpanded, setUndergroundExpanded] = useState(false);
 
   const allLinesVisible = UNDERGROUND_LINES.every(
     (line) => visibleLines[line]

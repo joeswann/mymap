@@ -4,7 +4,8 @@
   right: $spacing-sm;
   z-index: calc($z-sidebar + 11);
 
-  padding: $spacing-sm $spacing-md;
+  height: 40px;
+  padding: 0 $spacing-sm;
   background: $color-bg-secondary;
   border: 1px solid $color-border;
   border-radius: $radius-md;
@@ -14,6 +15,9 @@
   cursor: pointer;
   transition: all $transition-fast;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
   @include tablet {
     top: $spacing-md;
@@ -28,6 +32,23 @@
   &.open {
     background: $color-bg-tertiary;
     border-color: $color-accent;
+  }
+}
+
+.hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 18px;
+  height: 14px;
+
+  span {
+    display: block;
+    width: 100%;
+    height: 2px;
+    background: currentColor;
+    border-radius: 999px;
   }
 }
 
