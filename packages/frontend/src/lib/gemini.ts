@@ -15,46 +15,16 @@ export interface GeminiResponse {
 // Gemini raw payload (before normalization)
 interface GeminiRawPayload {
   parsedQuery?: ParsedQuery;
-  search_intent?: {
-    query?: string;
-    filters?: NonNullable<ParsedQuery["context"]>["filters"];
-    location?: {
-      latitude: number;
-      longitude: number;
-    };
-  };
-  searchTerm?: string;
-  location?: {
-    latitude: number;
-    longitude: number;
-  };
-  suggested_places?: Array<{
+  results?: Array<{
     id?: string;
     name: string;
     description?: string;
     address?: string;
-    coordinates?: {
-      latitude?: number;
-      longitude?: number;
-      lat?: number;
-      lng?: number;
-      x?: number;
-      y?: number;
-    };
-  }>;
-  places?: Array<{
-    id?: string;
-    name: string;
-    description?: string;
-    address?: string;
-    coordinates?: {
-      latitude?: number;
-      longitude?: number;
-      lat?: number;
-      lng?: number;
-      x?: number;
-      y?: number;
-    };
+    photoUrl?: string;
+    rating?: number;
+    website?: string;
+    phone?: string;
+    sources?: string[];
   }>;
 }
 
@@ -66,11 +36,16 @@ Guidelines:
 - Extract the user's search intent and filters.
 - If the user provides a location (area or coordinates), include it.
 - Only include real companies/places you are confident exist.
-- Provide up to 20 suggested places relevant to the query.
+- Provide up to 10 suggested places relevant to the query.
 - Use the viewport center as the reference and keep results within ~10km.
 - Include a street address or full place address for every result.
+- Include a short description, rating (0-5), website, phone, and a photo URL if available.
+- If you cite an address, include sources (URLs or names like "reddit") when known.
 - Do not include coordinates; the server will geocode addresses.
+- Use the viewport center only for relevance; do not include it in output.
 - Keep descriptions concise and useful (1 sentence).
+- Respond with ONLY valid JSON that matches the tool schema exactly.
+- Use camelCase keys only (e.g., "photoUrl", "parsedQuery", "searchTerm").
 `;
 
 // Gemini tool schema
@@ -90,13 +65,6 @@ export const TOOL_SCHEMA = {
             type: "OBJECT",
             properties: {
               area: { type: "STRING" },
-              coordinates: {
-                type: "OBJECT",
-                properties: {
-                  latitude: { type: "NUMBER" },
-                  longitude: { type: "NUMBER" },
-                },
-              },
             },
           },
           context: {
@@ -154,13 +122,11 @@ export const TOOL_SCHEMA = {
             name: { type: "STRING" },
             description: { type: "STRING" },
             address: { type: "STRING" },
-            coordinates: {
-              type: "OBJECT",
-              properties: {
-                latitude: { type: "NUMBER" },
-                longitude: { type: "NUMBER" },
-              },
-            },
+            photoUrl: { type: "STRING" },
+            rating: { type: "NUMBER" },
+            website: { type: "STRING" },
+            phone: { type: "STRING" },
+            sources: { type: "ARRAY", items: { type: "STRING" } },
             type: {
               type: "STRING",
               enum: [
@@ -207,7 +173,7 @@ export async function callGeminiTool(payload: {
     .join("\n");
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -221,15 +187,16 @@ export async function callGeminiTool(payload: {
         generationConfig: {
           response_mime_type: "application/json",
           temperature: 0.4,
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
-    }
+    },
   );
 
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
-      `Gemini API error: ${response.status} ${response.statusText} - ${errorText}`
+      `Gemini API error: ${response.status} ${response.statusText} - ${errorText}`,
     );
   }
 
@@ -243,14 +210,14 @@ export async function callGeminiTool(payload: {
 export function normalizeGeminiPayload(
   raw: GeminiRawPayload | null | undefined,
   query: string,
-  userLocation?: { latitude: number; longitude: number }
+  userLocation?: { latitude: number; longitude: number },
 ): { parsedQuery: ParsedQuery; results: AiSearchResult[] } {
   // Fallback for null/invalid responses
   if (!raw || typeof raw !== "object") {
     return {
       parsedQuery: {
         searchTerm: query,
-        ...(userLocation && { location: { coordinates: userLocation } }),
+        ...(userLocation && { location: { area: "Near you" } }),
       },
       results: [],
     };
@@ -258,55 +225,37 @@ export function normalizeGeminiPayload(
 
   // If already normalized, return as-is
   if (raw.parsedQuery) {
+    const rawParsed = raw.parsedQuery as ParsedQuery & {
+      filters?: NonNullable<ParsedQuery["context"]>["filters"];
+    };
+    const location = rawParsed.location;
+    const context = rawParsed.context ? { ...rawParsed.context } : undefined;
+    if (!context?.filters && rawParsed.filters) {
+      if (context) {
+        context.filters = rawParsed.filters;
+      } else {
+        (rawParsed as ParsedQuery).context = { filters: rawParsed.filters };
+      }
+    }
+
     return {
-      parsedQuery: raw.parsedQuery,
-      results: (raw as { parsedQuery: ParsedQuery; results: AiSearchResult[] }).results || [],
+      parsedQuery: {
+        searchTerm: rawParsed.searchTerm || query,
+        ...(context && { context }),
+        location: location?.area ? { area: location.area } : undefined,
+      },
+      results:
+        (raw as { parsedQuery: ParsedQuery; results: AiSearchResult[] })
+          .results || [],
     };
   }
 
-  // Extract search intent
-  const searchIntent =
-    raw.search_intent && typeof raw.search_intent === "object"
-      ? raw.search_intent
-      : null;
-
-  // Build parsed query
   const parsedQuery: ParsedQuery = {
-    searchTerm:
-      searchIntent?.query ||
-      (typeof raw.search_intent === "string" ? raw.search_intent : "") ||
-      raw.searchTerm ||
-      query,
+    searchTerm: query,
+    ...(userLocation && { location: { area: "Near you" } }),
   };
 
-  // Add context with filters if available
-  if (searchIntent?.filters) {
-    parsedQuery.context = { filters: searchIntent.filters };
-  }
-
-  // Add location if available
-  if (searchIntent?.location) {
-    parsedQuery.location = {
-      coordinates: {
-        latitude: searchIntent.location.latitude,
-        longitude: searchIntent.location.longitude,
-      },
-    };
-  } else if (raw.location) {
-    parsedQuery.location = {
-      coordinates: {
-        latitude: raw.location.latitude,
-        longitude: raw.location.longitude,
-      },
-    };
-  }
-
-  // Extract places from various possible keys
-  const sourcePlaces = Array.isArray(raw.suggested_places)
-    ? raw.suggested_places
-    : Array.isArray(raw.places)
-      ? raw.places
-      : [];
+  const sourcePlaces = Array.isArray(raw.results) ? raw.results : [];
 
   // Normalize place results
   const results: AiSearchResult[] = sourcePlaces.map((place, index) => ({
@@ -314,20 +263,11 @@ export function normalizeGeminiPayload(
     name: place.name,
     description: place.description,
     address: place.address,
-    coordinates: place.coordinates
-      ? {
-          latitude:
-            place.coordinates.latitude ??
-            place.coordinates.lat ??
-            place.coordinates.y ??
-            0,
-          longitude:
-            place.coordinates.longitude ??
-            place.coordinates.lng ??
-            place.coordinates.x ??
-            0,
-        }
-      : undefined,
+    photoUrl: place.photoUrl,
+    rating: typeof place.rating === "number" ? place.rating : undefined,
+    website: place.website,
+    phone: place.phone,
+    sources: Array.isArray(place.sources) ? place.sources : undefined,
     type: "place",
   }));
 

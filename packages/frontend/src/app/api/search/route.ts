@@ -7,6 +7,7 @@ import {
   SEARCH_RADIUS_KM,
 } from "~/lib/gemini";
 import { geocodeAddress, getDistanceKm } from "~/lib/geocoding";
+import { RESULT_LIMIT } from "~/lib/constants";
 
 /**
  * Build a fallback response when Gemini API is unavailable
@@ -59,7 +60,16 @@ export async function GET(request: Request) {
 
     let parsedArgs: unknown = null;
     if (typeof textPart === "string") {
-      parsedArgs = JSON.parse(textPart);
+      try {
+        parsedArgs = JSON.parse(textPart);
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.log("Gemini raw text:", textPart);
+        }
+        throw error;
+      }
+    } else if (process.env.NODE_ENV !== "production") {
+      console.log("Gemini response missing text part:", parts);
     }
 
     if (!parsedArgs) {
@@ -82,6 +92,9 @@ export async function GET(request: Request) {
     // Validate with Zod schema
     const validation = SearchResponseSchema.safeParse(normalizedArgs);
     if (!validation.success) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("Gemini normalized args:", normalizedArgs);
+      }
       console.warn("Search tool validation errors:", validation.error.format());
       return NextResponse.json(buildFallback(query, userLocation));
     }
@@ -99,14 +112,38 @@ export async function GET(request: Request) {
       },
     };
 
-    // Geocode addresses to coordinates
-    for (const result of normalized.results) {
-      if (result.address) {
-        const coords = await geocodeAddress(result.address, userLocation);
-        if (coords) {
-          result.coordinates = coords;
+    normalized.results = normalized.results.slice(0, RESULT_LIMIT);
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        "Search normalized results count:",
+        normalized.results.length
+      );
+    }
+
+    // Geocode addresses to coordinates (in parallel)
+    normalized.results = await Promise.all(
+      normalized.results.map(async (result) => {
+        if (!result.address || result.coordinates) {
+          return result;
         }
-      }
+
+        const coords = await geocodeAddress(result.address, userLocation);
+        if (!coords) {
+          if (process.env.NODE_ENV !== "production") {
+            console.log("Geocode failed for address:", result.address);
+          }
+          return result;
+        }
+
+        return { ...result, coordinates: coords };
+      })
+    );
+
+    if (process.env.NODE_ENV !== "production") {
+      const withCoords = normalized.results.filter(
+        (result) => result.coordinates
+      ).length;
+      console.log("Geocoded results count:", withCoords);
     }
 
     // Filter results by distance if user location is provided
@@ -116,6 +153,12 @@ export async function GET(request: Request) {
         const distance = getDistanceKm(userLocation, result.coordinates);
         return distance <= SEARCH_RADIUS_KM;
       });
+      if (process.env.NODE_ENV !== "production") {
+        console.log(
+          "Results after distance filter:",
+          normalized.results.length
+        );
+      }
     }
 
     return NextResponse.json(normalized);

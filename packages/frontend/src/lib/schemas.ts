@@ -6,12 +6,6 @@ export const ParsedQuerySchema = z.object({
   location: z
     .object({
       area: z.string().optional(),
-      coordinates: z
-        .object({
-          latitude: z.number().optional(),
-          longitude: z.number().optional(),
-        })
-        .optional(),
     })
     .optional(),
   context: z
@@ -57,12 +51,11 @@ export const AiResultSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   address: z.string().optional(),
-  coordinates: z
-    .object({
-      latitude: z.number(),
-      longitude: z.number(),
-    })
-    .optional(),
+  photoUrl: z.string().optional(),
+  rating: z.number().min(0).max(5).optional(),
+  website: z.string().optional(),
+  phone: z.string().optional(),
+  sources: z.array(z.string()).optional(),
   type: z
     .enum([
       "place",

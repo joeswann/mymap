@@ -2,10 +2,6 @@ export type ParsedQuery = {
   searchTerm: string;
   location?: {
     area?: string;
-    coordinates?: {
-      latitude?: number;
-      longitude?: number;
-    };
   };
   context?: {
     type?: "restaurant" | "hotel" | "cafe" | "park" | "landmark" | "store" | "other";
@@ -28,6 +24,11 @@ export type AiSearchResult = {
   name: string;
   description?: string;
   address?: string;
+  photoUrl?: string;
+  rating?: number;
+  website?: string;
+  phone?: string;
+  sources?: string[];
   coordinates?: {
     latitude: number;
     longitude: number;
@@ -58,6 +59,12 @@ export type SearchResult =
       description: string;
       coordinates?: [number, number];
       type: "place";
+      address?: string;
+      photoUrl?: string;
+      rating?: number;
+      website?: string;
+      phone?: string;
+      sources?: string[];
     }
   | {
       id: string;

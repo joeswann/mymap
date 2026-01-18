@@ -14,8 +14,6 @@ export function formatParsedQueryDescription(parsedQuery: ParsedQuery): string {
 
   if (location?.area) {
     parts.push(`Area: ${location.area}`);
-  } else if (location?.coordinates) {
-    parts.push("Near your location");
   }
 
   if (context?.filters?.priceRange) {

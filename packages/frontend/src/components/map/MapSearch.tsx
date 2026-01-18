@@ -8,7 +8,7 @@ import type { SearchResult } from "~/lib/searchTypes";
 import { fetchUndergroundStations, fetchSearch } from "~/lib/api";
 import { formatParsedQueryDescription, getResultIcon } from "~/lib/searchHelpers";
 import { createMarkers, clearMarkers } from "~/lib/mapbox/markers";
-import { SEARCH_DEBOUNCE_MS, RESULT_LIMIT } from "~/lib/constants";
+import { RESULT_LIMIT } from "~/lib/constants";
 import type { TflStationFeature } from "~/lib/tflTypes";
 
 interface MapSearchProps {
@@ -18,33 +18,16 @@ interface MapSearchProps {
 export default function MapSearch({ map }: MapSearchProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [intentResult, setIntentResult] = useState<SearchResult | null>(null);
+  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const searchTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
   const markersRef = useRef<any[]>([]); // Use any[] for mapbox markers
-
-  // Debounced search effect
-  useEffect(() => {
-    if (query.length < 2) {
-      setResults([]);
-      setShowResults(false);
-      return;
-    }
-
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
-    }
-
-    searchTimeout.current = setTimeout(() => {
-      performSearch(query);
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      if (searchTimeout.current) {
-        clearTimeout(searchTimeout.current);
-      }
-    };
-  }, [query]);
+  const emptyStateQueryRef = useRef<string | null>(null);
+  const latestSearchId = useRef(0);
+  const cacheRef = useRef(
+    new Map<string, { results: SearchResult[]; intent: SearchResult | null }>()
+  );
 
   // Marker management effect
   useEffect(() => {
@@ -55,7 +38,11 @@ export default function MapSearch({ map }: MapSearchProps) {
     markersRef.current = [];
 
     // Create new markers for search results
-    markersRef.current = createMarkers(map, results);
+    markersRef.current = createMarkers(map, results, (result) => {
+      if (result.type === "place") {
+        setSelectedResult(result);
+      }
+    });
 
     return () => {
       clearMarkers(markersRef.current);
@@ -66,10 +53,11 @@ export default function MapSearch({ map }: MapSearchProps) {
   /**
    * Perform search using both AI and station search
    */
-  const performSearch = async (searchQuery: string) => {
-    setIsSearching(true);
-    const searchResults: SearchResult[] = [];
-
+  const performSearch = async (
+    searchQuery: string,
+    cacheKey: string,
+    searchId: number
+  ) => {
     try {
       const userLocation = map
         ? { latitude: map.getCenter().lat, longitude: map.getCenter().lng }
@@ -81,17 +69,21 @@ export default function MapSearch({ map }: MapSearchProps) {
         fetchSearch(searchQuery, userLocation),
       ]);
 
-      // Add search intent result
-      searchResults.push({
+      const intent: SearchResult = {
         id: "intent",
         name: `Search: ${aiData.parsedQuery.searchTerm || searchQuery}`,
         description: formatParsedQueryDescription(aiData.parsedQuery),
         type: "intent",
-      });
+      };
 
       const effectiveQuery = (aiData.parsedQuery.searchTerm || searchQuery).trim();
       if (!effectiveQuery) {
-        setResults(searchResults);
+        if (searchId !== latestSearchId.current) {
+          return;
+        }
+        setIntentResult(intent);
+        setResults([]);
+        emptyStateQueryRef.current = cacheKey;
         setShowResults(true);
         return;
       }
@@ -101,13 +93,17 @@ export default function MapSearch({ map }: MapSearchProps) {
         id: result.id || `place-${index}`,
         name: result.name,
         description: result.description || result.address || "Suggested place",
+        address: result.address,
+        photoUrl: result.photoUrl,
+        rating: result.rating,
+        website: result.website,
+        phone: result.phone,
+        sources: result.sources,
         coordinates: result.coordinates
           ? [result.coordinates.longitude, result.coordinates.latitude]
           : undefined,
         type: "place" as const,
       }));
-
-      searchResults.push(...aiResults);
 
       // Add matching stations
       const matchingStations: SearchResult[] = stationsData.features
@@ -125,16 +121,36 @@ export default function MapSearch({ map }: MapSearchProps) {
           type: "station" as const,
         }));
 
-      searchResults.push(...matchingStations);
-
       // Limit total results
-      const nextResults = searchResults.slice(0, RESULT_LIMIT);
+      const nextResults = [...aiResults, ...matchingStations].slice(
+        0,
+        RESULT_LIMIT
+      );
+
+      if (searchId !== latestSearchId.current) {
+        return;
+      }
+
+      setIntentResult(intent);
       setResults(nextResults);
+      setSelectedResult(null);
       setShowResults(true);
+
+      if (nextResults.length > 0) {
+        cacheRef.current.set(cacheKey, {
+          results: nextResults,
+          intent,
+        });
+        emptyStateQueryRef.current = null;
+      } else {
+        emptyStateQueryRef.current = cacheKey;
+      }
     } catch (error) {
       console.error("Search error:", error);
     } finally {
-      setIsSearching(false);
+      if (searchId === latestSearchId.current) {
+        setIsSearching(false);
+      }
     }
   };
 
@@ -143,11 +159,7 @@ export default function MapSearch({ map }: MapSearchProps) {
    */
   const handleSelectResult = (result: SearchResult) => {
     if (!map) return;
-
-    if (result.type === "intent" || !result.coordinates) {
-      setShowResults(false);
-      return;
-    }
+    if (!result.coordinates) return;
 
     const zoom = 15;
 
@@ -157,39 +169,115 @@ export default function MapSearch({ map }: MapSearchProps) {
       duration: 1500,
     });
 
+    if (result.type === "place") {
+      setSelectedResult(result);
+    } else {
+      setSelectedResult(null);
+    }
     setShowResults(true);
   };
 
   return (
     <div className={styles.search}>
-      <div className={styles.form}>
+      <form
+        className={styles.form}
+        onSubmit={(event) => {
+          event.preventDefault();
+          const trimmedQuery = query.trim();
+          const cacheKey = trimmedQuery.toLowerCase();
+
+          if (!trimmedQuery) {
+            setShowResults(false);
+            setSelectedResult(null);
+            return;
+          }
+
+          const cached = cacheRef.current.get(cacheKey);
+          if (cached) {
+            setResults(cached.results);
+            setIntentResult(cached.intent);
+            setShowResults(true);
+            setSelectedResult(null);
+          }
+
+          emptyStateQueryRef.current = null;
+          setIsSearching(true);
+          setShowResults(true);
+          setSelectedResult(null);
+
+          const searchId = ++latestSearchId.current;
+          performSearch(trimmedQuery, cacheKey, searchId);
+        }}
+      >
         <input
           id="map-search"
           name="map-search"
           type="text"
+          autoComplete="off"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            const nextQuery = e.target.value;
+            const cacheKey = nextQuery.trim().toLowerCase();
+            setQuery(nextQuery);
+            setSelectedResult(null);
+
+            if (!cacheKey) {
+              setShowResults(false);
+              emptyStateQueryRef.current = null;
+              return;
+            }
+
+            const cached = cacheRef.current.get(cacheKey);
+            if (cached) {
+              setResults(cached.results);
+              setIntentResult(cached.intent);
+              setShowResults(true);
+              emptyStateQueryRef.current = null;
+              return;
+            }
+
+            if (emptyStateQueryRef.current !== cacheKey) {
+              emptyStateQueryRef.current = null;
+            }
+          }}
           placeholder="Search the map in plain English..."
           className={styles.input}
-          onFocus={() => query.length >= 2 && setShowResults(true)}
+          onFocus={() => {
+            if (results.length > 0 || intentResult || isSearching) {
+              setShowResults(true);
+            }
+          }}
           aria-label="Search the map"
         />
         {isSearching && <div className={styles.spinner}>⏳</div>}
-      </div>
+      </form>
 
-      {showResults && results.length > 0 && (
+      {showResults && (
         <>
           <div className={styles.results}>
+            {intentResult && (
+              <div className={classNames(styles.result, styles.resultStatic)}>
+                <span className={classNames(styles.icon, styles.intent)}>
+                  {getResultIcon("intent")}
+                </span>
+                <div className={styles.resultContent}>
+                  <div className={styles.resultName}>{intentResult.name}</div>
+                  <div className={styles.resultDescription}>
+                    {intentResult.description}
+                  </div>
+                </div>
+              </div>
+            )}
             {results.map((result) => (
               <button
                 key={result.id}
                 className={styles.result}
                 onClick={() => handleSelectResult(result)}
+                type="button"
               >
                 <span
                   className={classNames(styles.icon, {
                     [styles.station]: result.type === "station",
-                    [styles.intent]: result.type === "intent",
                     [styles.place]: result.type === "place",
                   })}
                 >
@@ -203,12 +291,91 @@ export default function MapSearch({ map }: MapSearchProps) {
                 </div>
               </button>
             ))}
+            {!isSearching &&
+              results.length === 0 &&
+              emptyStateQueryRef.current === query.trim().toLowerCase() && (
+                <div className={classNames(styles.result, styles.resultStatic)}>
+                  <div className={styles.resultContent}>
+                    <div className={styles.resultName}>No results</div>
+                    <div className={styles.resultDescription}>
+                      Try a different search or press Enter to retry.
+                    </div>
+                  </div>
+                </div>
+              )}
           </div>
           <div
             className={styles.resultsOverlay}
             onClick={() => setShowResults(false)}
           />
         </>
+      )}
+
+      {selectedResult?.type === "place" && (
+        <div className={styles.infoCard}>
+          {selectedResult.photoUrl && (
+            <div className={styles.infoPhotoWrap}>
+              <img
+                src={selectedResult.photoUrl}
+                alt={selectedResult.name}
+                className={styles.infoPhoto}
+              />
+            </div>
+          )}
+          <div className={styles.infoBody}>
+            <div className={styles.infoTitle}>{selectedResult.name}</div>
+            {selectedResult.address && (
+              <div className={styles.infoMeta}>{selectedResult.address}</div>
+            )}
+            {typeof selectedResult.rating === "number" && (
+              <div className={styles.infoMeta}>
+                Rating: {selectedResult.rating.toFixed(1)} / 5
+              </div>
+            )}
+            {selectedResult.description && (
+              <div className={styles.infoDescription}>
+                {selectedResult.description}
+              </div>
+            )}
+            <div className={styles.infoLinks}>
+              {selectedResult.website && (
+                <a
+                  href={selectedResult.website}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Website
+                </a>
+              )}
+              {selectedResult.phone && (
+                <a href={`tel:${selectedResult.phone}`}>Call</a>
+              )}
+            </div>
+            {selectedResult.sources && selectedResult.sources.length > 0 && (
+              <div className={styles.infoSources}>
+                <span>Sources:</span>
+                <div className={styles.infoSourceList}>
+                  {selectedResult.sources.map((source, index) => {
+                    const trimmed = source.trim();
+                    const isUrl = /^https?:\/\//i.test(trimmed);
+                    return isUrl ? (
+                      <a
+                        key={`${trimmed}-${index}`}
+                        href={trimmed}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {new URL(trimmed).hostname}
+                      </a>
+                    ) : (
+                      <span key={`${trimmed}-${index}`}>{trimmed}</span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -62,6 +62,15 @@ export async function geocodeAddress(
   });
 
   if (!response.ok) {
+    if (process.env.NODE_ENV !== "production") {
+      const bodyText = await response.text().catch(() => "");
+      console.log("Geocode error response:", {
+        status: response.status,
+        statusText: response.statusText,
+        body: bodyText,
+        address,
+      });
+    }
     return null;
   }
 

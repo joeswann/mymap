@@ -14,7 +14,8 @@ export const MARKER_COLORS = {
  */
 export function createMarkers(
   map: mapboxgl.Map,
-  results: SearchResult[]
+  results: SearchResult[],
+  onSelect?: (result: SearchResult) => void
 ): mapboxgl.Marker[] {
   const markers: mapboxgl.Marker[] = [];
 
@@ -33,6 +34,10 @@ export function createMarkers(
     const marker = new mapboxgl.Marker({ color })
       .setLngLat(result.coordinates)
       .addTo(map);
+
+    if (onSelect) {
+      marker.getElement().addEventListener("click", () => onSelect(result));
+    }
 
     markers.push(marker);
   });
