@@ -7,11 +7,17 @@ import {
   SEARCH_RADIUS_KM,
 } from "~/lib/gemini";
 import {
+  type Coordinates,
   geocodeAddress,
   getDistanceKm,
   reverseGeocodeAddress,
 } from "~/lib/geocoding";
 import { RESULT_LIMIT } from "~/lib/constants";
+import {
+  verifyUrls,
+  extractResultUrls,
+  validateAndCleanResult,
+} from "~/lib/urlValidation";
 
 /**
  * Build a fallback response when Gemini API is unavailable
@@ -164,15 +170,79 @@ export async function GET(request: Request) {
       console.log("Geocoded results count:", withCoords);
     }
 
+    // Validate URLs and calculate confidence scores
+    const allUrls = normalized.results.flatMap((r) => extractResultUrls(r));
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Validating URLs:", allUrls.length);
+    }
+
+    const urlValidation = await verifyUrls(allUrls, {
+      concurrency: 10,
+      timeoutMs: 2000,
+    });
+
+    if (process.env.NODE_ENV !== "production") {
+      const validCount = Array.from(urlValidation.values()).filter(
+        (v) => v,
+      ).length;
+      console.log(`URL validation: ${validCount}/${allUrls.length} valid`);
+    }
+
+    // Clean results and add confidence scores
+    normalized.results = await Promise.all(
+      normalized.results.map((result) =>
+        validateAndCleanResult(result, urlValidation),
+      ),
+    );
+
+    // Sort by confidence (high first), then by rating
+    normalized.results.sort((a, b) => {
+      const confidenceOrder = { high: 3, medium: 2, low: 1 };
+      const aConfScore = confidenceOrder[a.confidence || "low"];
+      const bConfScore = confidenceOrder[b.confidence || "low"];
+
+      if (aConfScore !== bConfScore) {
+        return bConfScore - aConfScore;
+      }
+
+      // If same confidence, sort by rating
+      const aRating = a.rating || 0;
+      const bRating = b.rating || 0;
+      return bRating - aRating;
+    });
+
+    // Calculate metadata about result quality
+    const metadata = {
+      resultsWithSources: normalized.results.filter(
+        (r) => (r.sources?.length || 0) > 0,
+      ).length,
+      resultsWithWebsites: normalized.results.filter((r) => r.website).length,
+      averageConfidence:
+        normalized.results.reduce((sum, r) => {
+          const confidenceScore = { high: 3, medium: 2, low: 1 };
+          return sum + confidenceScore[r.confidence || "low"];
+        }, 0) / (normalized.results.length || 1),
+    };
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Result quality metadata:", metadata);
+    }
+
     // Filter results by distance if user location is provided
     if (userLocation) {
       if (process.env.NODE_ENV !== "production") {
         const distances = normalized.results
-          .filter((result) => result.coordinates)
+          .filter(
+            (
+              result,
+            ): result is AiSearchResult & {
+              coordinates: { latitude: number; longitude: number };
+            } => !!result.coordinates,
+          )
           .map((result) => ({
             name: result.name,
             distanceKm: Number(
-              getDistanceKm(userLocation, result.coordinates!).toFixed(2),
+              getDistanceKm(userLocation, result.coordinates).toFixed(2),
             ),
           }));
         console.log(
@@ -180,11 +250,16 @@ export async function GET(request: Request) {
           JSON.stringify(distances, null, 2),
         );
       }
-      normalized.results = normalized.results.filter((result) => {
-        if (!result.coordinates) return false;
-        const distance = getDistanceKm(userLocation, result.coordinates);
-        return distance <= SEARCH_RADIUS_KM;
-      });
+      normalized.results = normalized.results.filter(
+        (result): result is AiSearchResult & { coordinates: Coordinates } => {
+          if (!result.coordinates) return false;
+          const distance = getDistanceKm(
+            userLocation,
+            result.coordinates as Coordinates,
+          );
+          return distance <= SEARCH_RADIUS_KM;
+        },
+      );
       if (process.env.NODE_ENV !== "production") {
         console.log(
           "Results after distance filter:",
@@ -193,7 +268,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json(normalized);
+    return NextResponse.json({ ...normalized, metadata });
   } catch (error) {
     console.error("Search tool error:", error);
     return NextResponse.json(buildFallback(query, userLocation));

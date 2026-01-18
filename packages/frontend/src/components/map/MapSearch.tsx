@@ -6,7 +6,10 @@ import styles from "./MapSearch.module.scss";
 import classNames from "classnames";
 import type { SearchResult } from "~/lib/searchTypes";
 import { fetchUndergroundStations, fetchSearch } from "~/lib/api";
-import { formatParsedQueryDescription, getResultIcon } from "~/lib/searchHelpers";
+import {
+  formatParsedQueryDescription,
+  getResultIcon,
+} from "~/lib/searchHelpers";
 import { createMarkers, clearMarkers } from "~/lib/mapbox/markers";
 import { RESULT_LIMIT } from "~/lib/constants";
 import type { TflStationFeature } from "~/lib/tflTypes";
@@ -21,7 +24,9 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [intentResult, setIntentResult] = useState<SearchResult | null>(null);
-  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(
+    null,
+  );
   const [photoFailed, setPhotoFailed] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -29,7 +34,7 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
   const emptyStateQueryRef = useRef<string | null>(null);
   const latestSearchId = useRef(0);
   const cacheRef = useRef(
-    new Map<string, { results: SearchResult[]; intent: SearchResult | null }>()
+    new Map<string, { results: SearchResult[]; intent: SearchResult | null }>(),
   );
 
   // Marker management effect
@@ -72,7 +77,7 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
   const performSearch = async (
     searchQuery: string,
     cacheKey: string,
-    searchId: number
+    searchId: number,
   ) => {
     try {
       const userLocation = map
@@ -92,7 +97,9 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
         type: "intent",
       };
 
-      const effectiveQuery = (aiData.parsedQuery.searchTerm || searchQuery).trim();
+      const effectiveQuery = (
+        aiData.parsedQuery.searchTerm || searchQuery
+      ).trim();
       if (!effectiveQuery) {
         if (searchId !== latestSearchId.current) {
           return;
@@ -127,7 +134,7 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
         .filter((feature: TflStationFeature) =>
           feature.properties.name
             .toLowerCase()
-            .includes(effectiveQuery.toLowerCase())
+            .includes(effectiveQuery.toLowerCase()),
         )
         .slice(0, 3)
         .map((feature: TflStationFeature) => ({
@@ -141,7 +148,7 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
       // Limit total results
       const nextResults = [...aiResults, ...matchingStations].slice(
         0,
-        RESULT_LIMIT
+        RESULT_LIMIT,
       );
 
       if (searchId !== latestSearchId.current) {
@@ -177,6 +184,7 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
    */
   const handleSelectResult = (result: SearchResult) => {
     if (!map) return;
+    if (result.type === "intent") return;
     if (!result.coordinates) return;
 
     const zoom = 15;
@@ -299,19 +307,19 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
             )}
             {results.map((result) => {
               const distanceKm =
-                userLocation && result.coordinates
+                userLocation && result.type !== "intent" && result.coordinates
                   ? getDistanceKm(userLocation, {
                       latitude: result.coordinates[1],
                       longitude: result.coordinates[0],
                     })
                   : null;
-              const distanceText =
-                distanceKm !== null ? `${distanceKm.toFixed(1)} km` : "";
-              const descriptionText = result.description
-                ? distanceText
-                  ? `${result.description} · ${distanceText}`
-                  : result.description
-                : distanceText;
+
+              // Get metadata for places
+              const hasMetadata =
+                result.type === "place" &&
+                (distanceKm !== null ||
+                  result.priceRange ||
+                  result.rating !== undefined);
 
               return (
                 <button
@@ -330,9 +338,28 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
                   </span>
                   <div className={styles.resultContent}>
                     <div className={styles.resultName}>{result.name}</div>
-                    {descriptionText && (
+                    {hasMetadata && (
+                      <div className={styles.resultMeta}>
+                        {distanceKm !== null && (
+                          <span className={styles.metaBadge}>
+                            {distanceKm.toFixed(1)}km
+                          </span>
+                        )}
+                        {result.rating !== undefined && (
+                          <span className={styles.metaBadge}>
+                            ★{result.rating.toFixed(1)}
+                          </span>
+                        )}
+                        {result.priceRange && (
+                          <span className={styles.metaBadge}>
+                            £{result.priceRange}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {result.description && (
                       <div className={styles.resultDescription}>
-                        {descriptionText}
+                        {result.description}
                       </div>
                     )}
                   </div>
@@ -376,34 +403,29 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
               <div className={styles.infoTitle}>{selectedResult.name}</div>
             </div>
             {selectedResult.address && (
-              <div className={styles.infoMeta}>{selectedResult.address}</div>
+              <div className={styles.infoAddress}>{selectedResult.address}</div>
             )}
             {(typeof selectedResult.rating === "number" ||
               selectedResult.priceRange ||
               (userLocation && selectedResult.coordinates)) && (
-              <div className={styles.infoMeta}>
-                {typeof selectedResult.rating === "number" && (
-                  <span>
-                    Rating: {selectedResult.rating.toFixed(1)} / 5
-                  </span>
-                )}
-                {selectedResult.priceRange && (
-                  <span>
-                    {typeof selectedResult.rating === "number" ? " · " : ""}
-                    Price: {selectedResult.priceRange}
-                  </span>
-                )}
+              <div className={styles.infoMetaBadges}>
                 {userLocation && selectedResult.coordinates && (
-                  <span>
-                    {(typeof selectedResult.rating === "number" ||
-                    selectedResult.priceRange)
-                      ? " · "
-                      : ""}
+                  <span className={styles.metaBadge}>
                     {getDistanceKm(userLocation, {
                       latitude: selectedResult.coordinates[1],
                       longitude: selectedResult.coordinates[0],
                     }).toFixed(1)}
                     km
+                  </span>
+                )}
+                {typeof selectedResult.rating === "number" && (
+                  <span className={styles.metaBadge}>
+                    ★{selectedResult.rating.toFixed(1)}
+                  </span>
+                )}
+                {selectedResult.priceRange && (
+                  <span className={styles.metaBadge}>
+                    £{selectedResult.priceRange}
                   </span>
                 )}
               </div>
@@ -429,6 +451,15 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
               )}
               {selectedResult.phone && (
                 <a href={`tel:${selectedResult.phone}`}>Call</a>
+              )}
+              {selectedResult.coordinates && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${selectedResult.coordinates[1]},${selectedResult.coordinates[0]}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Maps
+                </a>
               )}
             </div>
             {selectedResult.sources && selectedResult.sources.length > 0 && (
@@ -468,10 +499,10 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
             )}
             {(() => {
               const placeResults = results.filter(
-                (result) => result.type === "place"
+                (result) => result.type === "place",
               );
               const currentIndex = placeResults.findIndex(
-                (result) => result.id === selectedResult.id
+                (result) => result.id === selectedResult.id,
               );
               const total = placeResults.length;
               if (total <= 1 || currentIndex === -1) {
@@ -517,6 +548,7 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
   function fitMapToResults(nextResults: SearchResult[]) {
     if (!map) return;
     const coords = nextResults
+      .filter((result) => result.type !== "intent")
       .map((result) => result.coordinates)
       .filter((value): value is [number, number] => Array.isArray(value));
     if (coords.length === 0) return;
@@ -526,7 +558,7 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
     }
     const bounds = coords.reduce(
       (acc, coord) => acc.extend(coord),
-      new mapboxgl.LngLatBounds(coords[0], coords[0])
+      new mapboxgl.LngLatBounds(coords[0], coords[0]),
     );
     map.fitBounds(bounds, { padding: 80, duration: 900, maxZoom: 15 });
   }

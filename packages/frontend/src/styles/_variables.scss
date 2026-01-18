@@ -1,40 +1,53 @@
-// Dark Mode Color Palette
-$color-bg-primary: #0a0a0a;        // Main background
-$color-bg-secondary: #1a1a1a;      // Cards, panels
-$color-bg-tertiary: #2a2a2a;       // Elevated elements
-$color-bg-hover: #333333;          // Hover states
+// Brutalist Color Palette - High Contrast
+$color-bg-primary: #000000; // Pure black background
+$color-bg-secondary: #0a0a0a; // Cards, panels (slightly lifted)
+$color-bg-tertiary: #1a1a1a; // Elevated elements
+$color-bg-hover: #1a1a1a; // Hover states
 
-$color-text-primary: #ffffff;       // Primary text
-$color-text-secondary: #a0a0a0;    // Secondary text
-$color-text-tertiary: #707070;     // Tertiary/muted text
+$color-text-primary: #ffffff; // Pure white text
+$color-text-secondary: #cccccc; // Secondary text (higher contrast)
+$color-text-tertiary: #999999; // Tertiary/muted text
 
-$color-border: #2a2a2a;            // Borders
-$color-border-hover: #404040;      // Active borders
+$color-border: #333333; // Thicker, more visible borders
+$color-border-hover: #555555; // Active borders
+$color-border-accent: #00ff00; // Accent border (green, brutalist)
 
-$color-accent: #3b82f6;            // Primary accent (blue)
-$color-accent-hover: #60a5fa;      // Accent hover
+$color-accent: #00ff00; // Primary accent (neon green, brutalist)
+$color-accent-hover: #33ff33; // Accent hover
 
-// Station/place markers
-$color-marker-station: #0ea5e9;    // Light blue for stations
-$color-marker-place: #a78bfa;      // Purple for AI places
-$color-marker-user: #ef4444;       // Red for user location
+// Station/place markers - Neobrutalist palette
+$color-marker-station: #00ffff; // Electric cyan for stations
+$color-marker-place: #ffff00; // Neon yellow for AI places
+$color-marker-user: #ff0000; // Bright red for user location
 
-// Spacing & Layout
-$spacing-xs: 0.5rem;   // 8px
-$spacing-sm: 0.75rem;  // 12px
-$spacing-md: 1rem;     // 16px
-$spacing-lg: 1.5rem;   // 24px
-$spacing-xl: 2rem;     // 32px
+// Spacing & Layout - Compact brutalist spacing
+$spacing-xs: 0.375rem; // 6px (more compact)
+$spacing-sm: 0.5rem; // 8px
+$spacing-md: 0.75rem; // 12px
+$spacing-lg: 1rem; // 16px
+$spacing-xl: 1.5rem; // 24px
 
-// Border radius (minimalist - small radii)
-$radius-sm: 4px;
-$radius-md: 6px;
-$radius-lg: 8px;
+// Border radius - BRUTALIST: NO ROUNDED CORNERS
+$radius-sm: 0;
+$radius-md: 0;
+$radius-lg: 0;
 
-// Transitions
-$transition-fast: 150ms ease;
-$transition-normal: 200ms ease;
-$transition-slow: 300ms ease;
+// Border thickness
+$border-thin: 1px;
+$border-medium: 2px;
+$border-thick: 3px;
+
+// Transitions - Minimal or none for brutalism
+$transition-fast: 0ms;
+$transition-normal: 0ms;
+$transition-slow: 0ms;
+
+// Typography
+$font-mono:
+  "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", "Courier New", monospace;
+$font-system:
+  -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+  sans-serif;
 
 // Z-index scale
 $z-search: 100;

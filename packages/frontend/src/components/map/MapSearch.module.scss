@@ -1,15 +1,15 @@
 .search {
-  // Mobile-first: smaller, compact positioning
+  // Brutalist: compact, sharp positioning
   position: absolute;
   top: $spacing-sm;
   left: $spacing-sm;
-  right: calc($spacing-sm + 56px);
+  right: calc($spacing-sm + 48px);
   z-index: $z-search;
 
   @include tablet {
     left: $spacing-md;
     right: auto;
-    width: 360px;
+    width: 400px;
   }
 }
 
@@ -20,23 +20,27 @@
 .input {
   width: 100%;
   padding: $spacing-sm $spacing-md;
-  font-size: 14px;
+  font-size: 13px;
+  font-family: $font-mono;
+  letter-spacing: -0.01em;
 
-  // Dark mode styling
-  background: $color-bg-secondary;
-  border: 1px solid $color-border;
+  // Brutalist: pure black/white, thick borders, sharp corners
+  background: $color-bg-primary;
+  border: $border-medium solid $color-border;
   border-radius: $radius-md;
   color: $color-text-primary;
-  transition: all $transition-fast;
+  transition: none;
   outline: none;
 
   &::placeholder {
     color: $color-text-tertiary;
+    font-family: $font-mono;
   }
 
   &:focus {
     border-color: $color-accent;
-    background: $color-bg-tertiary;
+    background: $color-bg-primary;
+    box-shadow: inset 0 0 0 1px $color-accent;
   }
 }
 
@@ -45,12 +49,12 @@
   right: $spacing-md;
   top: 50%;
   transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #ffffff;
-  border-radius: 50%;
-  animation: spin 700ms linear infinite;
+  width: 12px;
+  height: 12px;
+  border: $border-medium solid $color-border;
+  border-top-color: $color-accent;
+  border-radius: 0; // Square spinner, brutalist
+  animation: spin 800ms linear infinite;
 }
 
 @keyframes spin {
@@ -60,10 +64,10 @@
 }
 
 .results {
-  // Compact mobile design
+  // Brutalist: compact, sharp edges, thick borders
   margin-top: $spacing-xs;
-  background: $color-bg-secondary;
-  border: 1px solid $color-border;
+  background: $color-bg-primary;
+  border: $border-medium solid $color-border;
   border-radius: $radius-md;
   max-height: 60vh;
   overflow-y: auto;
@@ -71,7 +75,7 @@
   z-index: calc($z-search + 1);
 
   @include tablet {
-    max-height: 400px;
+    max-height: 500px;
   }
 }
 
@@ -79,18 +83,19 @@
   padding: $spacing-sm $spacing-md;
   background: transparent;
   border: none;
-  border-bottom: 1px solid $color-border;
+  border-bottom: $border-thin solid $color-border;
   color: $color-text-primary;
   text-align: left;
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: $spacing-sm;
   cursor: pointer;
-  transition: background $transition-fast;
+  transition: none;
 
   &:hover {
-    background: $color-bg-hover;
+    background: $color-bg-tertiary;
+    border-left: $border-thick solid $color-accent;
   }
 
   &:last-child {
@@ -100,12 +105,17 @@
 
 .resultStatic {
   cursor: default;
+  &:hover {
+    background: transparent;
+    border-left: none;
+  }
 }
 
 .icon {
-  font-size: 20px;
-  line-height: 1;
+  font-size: 16px;
+  line-height: 1.2;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .station {
@@ -126,18 +136,43 @@
 }
 
 .resultName {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: $font-system;
   color: $color-text-primary;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.resultMeta {
+  display: flex;
+  gap: $spacing-xs;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.metaBadge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-family: $font-mono;
+  font-weight: 700;
+  background: $color-bg-tertiary;
+  border: $border-thin solid $color-border;
+  color: $color-text-primary;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .resultDescription {
-  font-size: 12px;
+  font-size: 11px;
+  font-family: $font-mono;
   color: $color-text-secondary;
-  margin-top: 2px;
+  margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -157,11 +192,11 @@
   left: $spacing-sm;
   bottom: $spacing-sm;
   z-index: calc($z-search + 2);
-  width: min(360px, calc(100vw - (#{$spacing-sm} * 2)));
-  background: $color-bg-secondary;
-  border: 1px solid $color-border;
+  width: min(400px, calc(100vw - (#{$spacing-sm} * 2)));
+  background: $color-bg-primary;
+  border: $border-thick solid $color-border;
   border-radius: $radius-lg;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -174,9 +209,22 @@
 
 .infoPhotoWrap {
   width: 100%;
-  height: 160px;
+  height: 140px;
   overflow: hidden;
   background: $color-bg-tertiary;
+  border-bottom: $border-medium solid $color-border;
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: $border-thin solid $color-border;
+    pointer-events: none;
+  }
 }
 
 .infoPhoto {
@@ -184,18 +232,22 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  filter: contrast(1.1) saturate(0.9);
 }
 
 .infoBody {
   padding: $spacing-md;
   display: flex;
   flex-direction: column;
-  gap: $spacing-xs;
+  gap: $spacing-sm;
 }
 
 .infoHeader {
   position: relative;
   padding-right: 0;
+  border-bottom: $border-thin solid $color-border;
+  padding-bottom: $spacing-sm;
+  margin-bottom: $spacing-xs;
 }
 
 .infoPager {
@@ -204,58 +256,105 @@
   right: $spacing-sm;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   color: $color-text-tertiary;
-  font-size: 11px;
+  font-size: 10px;
+  font-family: $font-mono;
   z-index: 1;
+  background: $color-bg-primary;
+  padding: 3px 6px;
+  border: $border-thin solid $color-border;
 }
 
 .pagerButton {
   border: none;
   background: transparent;
-  color: $color-text-tertiary;
-  font-size: 14px;
+  color: $color-text-primary;
+  font-size: 12px;
   padding: 0;
   cursor: pointer;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: $color-bg-tertiary;
+  }
 
   &:disabled {
-    opacity: 0.4;
+    opacity: 0.3;
     cursor: default;
+    background: transparent;
   }
 }
 
 .pagerCount {
-  min-width: 32px;
+  min-width: 40px;
   text-align: center;
+  font-weight: 600;
 }
 
 .infoTitle {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: $font-system;
   color: $color-text-primary;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .infoMeta {
-  font-size: 12px;
+  font-size: 11px;
+  font-family: $font-mono;
   color: $color-text-secondary;
+  line-height: 1.5;
+}
+
+.infoAddress {
+  font-size: 11px;
+  font-family: $font-mono;
+  color: $color-text-secondary;
+  line-height: 1.5;
+}
+
+.infoMetaBadges {
+  display: flex;
+  gap: $spacing-xs;
+  flex-wrap: wrap;
+  margin-top: $spacing-xs;
 }
 
 .infoDescription {
-  font-size: 13px;
+  font-size: 12px;
+  font-family: $font-system;
   color: $color-text-primary;
+  line-height: 1.4;
+  border-left: $border-medium solid $color-accent;
+  padding-left: $spacing-sm;
 }
 
 .infoLinks {
   display: flex;
-  gap: $spacing-sm;
+  gap: $spacing-md;
+  border-top: $border-thin solid $color-border;
+  padding-top: $spacing-sm;
 
   a {
     color: $color-accent;
-    font-size: 12px;
+    font-size: 11px;
+    font-family: $font-mono;
     text-decoration: none;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 4px 8px;
+    border: $border-thin solid $color-accent;
 
     &:hover {
-      color: $color-accent-hover;
+      background: $color-accent;
+      color: $color-bg-primary;
     }
   }
 }
@@ -264,23 +363,47 @@
   display: flex;
   flex-wrap: wrap;
   gap: $spacing-xs;
-  font-size: 11px;
+  font-size: 10px;
+  font-family: $font-mono;
   color: $color-text-tertiary;
+  border-top: $border-thin solid $color-border;
+  padding-top: $spacing-sm;
 
   a {
     color: $color-text-secondary;
     text-decoration: none;
+    padding: 2px 6px;
+    border: $border-thin solid $color-border;
+    background: $color-bg-secondary;
 
     &:hover {
       color: $color-text-primary;
+      border-color: $color-text-tertiary;
     }
   }
 }
 
 :global(.search-marker) {
-  transition: filter 150ms ease;
+  transition: none;
+
+  // Marker inner element (the colored square)
+  > div {
+    transition: none;
+  }
+
+  &:hover > div {
+    box-shadow:
+      0 0 0 2px #ffffff,
+      0 0 12px var(--marker-color);
+  }
 }
 
 :global(.search-marker.marker-selected) {
-  filter: brightness(1.25) saturate(1.1);
+  > div {
+    // Fill with the marker's color when selected
+    background: var(--marker-color) !important;
+    box-shadow:
+      0 0 0 2px #ffffff,
+      0 0 16px var(--marker-color);
+  }
 }

@@ -23,10 +23,6 @@ export function createStationFilter(visibleLineNames: string[]): any[] {
 
   return [
     "any",
-    ...visibleLineNames.map((lineName) => [
-      "in",
-      lineName,
-      ["get", "lines"],
-    ]),
+    ...visibleLineNames.map((lineName) => ["in", lineName, ["get", "lines"]]),
   ];
 }

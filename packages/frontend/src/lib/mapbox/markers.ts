@@ -1,12 +1,34 @@
 import mapboxgl from "mapbox-gl";
 import type { SearchResult } from "../searchTypes";
 
-// Marker color constants
+// Marker color constants - Neobrutalist palette (complements neon green accent)
 export const MARKER_COLORS = {
-  station: "#0ea5e9", // Light blue for stations
-  place: "#a78bfa", // Purple for AI places (updated for dark mode)
-  user: "#ef4444", // Red for user location
+  station: "#00ffff", // Electric cyan for stations
+  place: "#ffff00", // Neon yellow for AI places
+  user: "#ff0000", // Bright red for user location
 } as const;
+
+/**
+ * Create a custom neobrutalist marker element - black square with colored border
+ */
+function createMarkerElement(color: string, isStation: boolean): HTMLElement {
+  const el = document.createElement("div");
+  el.style.width = "18px";
+  el.style.height = "18px";
+  el.style.position = "relative";
+  el.style.transition = "none";
+
+  // Black background with colored border
+  el.style.background = "#000000";
+  el.style.border = `3px solid ${color}`;
+  el.style.boxShadow = `0 0 0 1px #000000`;
+
+  // Store the color as CSS variable for selection state
+  el.style.setProperty("--marker-color", color);
+  el.dataset.markerColor = color;
+
+  return el;
+}
 
 /**
  * Create markers for search results on the map
@@ -15,7 +37,7 @@ export const MARKER_COLORS = {
 export function createMarkers(
   map: mapboxgl.Map,
   results: SearchResult[],
-  onSelect?: (result: SearchResult) => void
+  onSelect?: (result: SearchResult) => void,
 ): mapboxgl.Marker[] {
   const markers: mapboxgl.Marker[] = [];
 
@@ -30,8 +52,11 @@ export function createMarkers(
       return;
     }
 
-    const color = result.type === "station" ? MARKER_COLORS.station : MARKER_COLORS.place;
-    const marker = new mapboxgl.Marker({ color })
+    const isStation = result.type === "station";
+    const color = isStation ? MARKER_COLORS.station : MARKER_COLORS.place;
+    const element = createMarkerElement(color, isStation);
+
+    const marker = new mapboxgl.Marker({ element })
       .setLngLat(result.coordinates)
       .addTo(map);
 

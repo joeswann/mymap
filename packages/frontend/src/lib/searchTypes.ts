@@ -2,9 +2,20 @@ export type ParsedQuery = {
   searchTerm: string;
   location?: {
     area?: string;
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
   };
   context?: {
-    type?: "restaurant" | "hotel" | "cafe" | "park" | "landmark" | "store" | "other";
+    type?:
+      | "restaurant"
+      | "hotel"
+      | "cafe"
+      | "park"
+      | "landmark"
+      | "store"
+      | "other";
     filters?: {
       cuisine?: string[];
       priceRange?: "low" | "medium" | "high" | "luxury";
@@ -43,6 +54,7 @@ export type AiSearchResult = {
     | "landmark"
     | "store"
     | "other";
+  confidence?: "high" | "medium" | "low";
 };
 
 // Search Result types (used in MapSearch component)
@@ -57,17 +69,18 @@ export type SearchResult =
   | {
       id: string;
       name: string;
-    description: string;
-    coordinates?: [number, number];
-    type: "place";
-    address?: string;
-    photoUrl?: string;
-    rating?: number;
-    priceRange?: "low" | "medium" | "high" | "luxury";
-    website?: string;
-    phone?: string;
-    sources?: string[];
-  }
+      description: string;
+      coordinates?: [number, number];
+      type: "place";
+      address?: string;
+      photoUrl?: string;
+      rating?: number;
+      priceRange?: "low" | "medium" | "high" | "luxury";
+      website?: string;
+      phone?: string;
+      sources?: string[];
+      confidence?: "high" | "medium" | "low";
+    }
   | {
       id: string;
       name: string;

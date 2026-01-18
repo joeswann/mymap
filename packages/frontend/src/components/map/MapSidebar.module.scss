@@ -4,17 +4,18 @@
   right: $spacing-sm;
   z-index: calc($z-sidebar + 11);
 
-  height: 40px;
-  padding: 0 $spacing-sm;
-  background: $color-bg-secondary;
-  border: 1px solid $color-border;
+  height: 36px;
+  width: 36px;
+  padding: 0;
+  background: $color-bg-primary;
+  border: $border-medium solid $color-border;
   border-radius: $radius-md;
   color: $color-text-primary;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all $transition-fast;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: none;
+  box-shadow: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -25,13 +26,14 @@
   }
 
   &:hover {
-    background: $color-bg-hover;
-    border-color: $color-border-hover;
+    background: $color-bg-tertiary;
+    border-color: $color-accent;
   }
 
   &.open {
-    background: $color-bg-tertiary;
+    background: $color-accent;
     border-color: $color-accent;
+    color: $color-bg-primary;
   }
 }
 
@@ -39,16 +41,16 @@
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
-  gap: 4px;
-  width: 18px;
-  height: 14px;
+  gap: 3px;
+  width: 14px;
+  height: 12px;
 
   span {
     display: block;
     width: 100%;
     height: 2px;
     background: currentColor;
-    border-radius: 999px;
+    border-radius: 0; // Sharp edges for brutalism
   }
 }
 
@@ -58,17 +60,17 @@
   right: 0;
   height: 100vh;
   width: 280px;
-  background: $color-bg-secondary;
-  border-left: 1px solid $color-border;
+  background: $color-bg-primary;
+  border-left: $border-thick solid $color-border;
   z-index: calc($z-sidebar + 10);
   transform: translateX(100%);
-  transition: transform $transition-slow;
+  transition: none;
   display: flex;
   flex-direction: column;
-  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
 
   @include tablet {
-    width: 300px;
+    width: 320px;
   }
 
   &.open {
@@ -77,26 +79,30 @@
 }
 
 .header {
-  padding: $spacing-lg $spacing-md $spacing-md;
-  border-bottom: 1px solid $color-border;
+  padding: $spacing-md;
+  border-bottom: $border-medium solid $color-border;
   background: $color-bg-secondary;
 }
 
 .title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: $font-mono;
   margin: 0;
   color: $color-text-primary;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .content {
   flex: 1;
   overflow-y: auto;
-  padding: $spacing-sm 0;
+  padding: 0;
 }
 
 .section {
-  margin-bottom: $spacing-xs;
+  margin-bottom: 0;
+  border-bottom: $border-thin solid $color-border;
 }
 
 .sectionHeader {
@@ -104,22 +110,26 @@
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  padding: $spacing-sm $spacing-md;
+  padding: $spacing-md;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: $font-mono;
   color: $color-text-primary;
-  transition: background $transition-fast;
+  transition: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 
   &:hover {
-    background: $color-bg-hover;
+    background: $color-bg-tertiary;
+    border-left: $border-thick solid $color-accent;
   }
 }
 
 .sectionIcon {
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
 }
 
@@ -129,9 +139,9 @@
 }
 
 .chevron {
-  font-size: 10px;
-  transition: transform $transition-normal;
-  color: $color-text-secondary;
+  font-size: 8px;
+  transition: none;
+  color: $color-accent;
 
   &.expanded {
     transform: rotate(180deg);
@@ -139,19 +149,9 @@
 }
 
 .sectionContent {
-  padding: $spacing-xs 0;
-  animation: slideDown $transition-normal ease;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  padding: 0;
+  animation: none;
+  background: $color-bg-secondary;
 }
 
 .toggleAll {
@@ -160,24 +160,28 @@
   align-items: center;
   gap: $spacing-sm;
   padding: $spacing-sm $spacing-md;
-  background: none;
+  background: $color-bg-secondary;
   border: none;
+  border-bottom: $border-thin solid $color-border;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: $font-mono;
   color: $color-text-primary;
-  transition: background $transition-fast;
-  margin-bottom: $spacing-xs;
+  transition: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 
   &:hover {
-    background: $color-bg-hover;
+    background: $color-bg-tertiary;
+    border-left: $border-medium solid $color-accent;
   }
 }
 
 .lineList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .lineToggle {
@@ -185,51 +189,60 @@
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  padding: $spacing-xs $spacing-md;
+  padding: $spacing-sm $spacing-md;
   background: none;
   border: none;
+  border-bottom: $border-thin solid $color-border;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: $font-system;
   color: $color-text-primary;
-  transition: background $transition-fast;
+  transition: none;
   text-align: left;
 
   &:hover {
-    background: $color-bg-hover;
+    background: $color-bg-tertiary;
+    border-left: $border-medium solid $color-accent;
+  }
+
+  &:last-child {
+    border-bottom: none;
   }
 }
 
 .checkbox {
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid $color-border-hover;
-  border-radius: $radius-sm;
+  width: 14px;
+  height: 14px;
+  border: $border-medium solid $color-border-hover;
+  border-radius: $radius-sm; // Sharp corners
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 900;
   flex-shrink: 0;
-  transition: all $transition-fast;
+  transition: none;
 
   &.checked {
     background: $color-accent;
     border-color: $color-accent;
-    color: $color-text-primary;
+    color: $color-bg-primary;
   }
 
   &.indeterminate {
-    background: $color-bg-hover;
+    background: $color-bg-tertiary;
     border-color: $color-border-hover;
     color: $color-text-secondary;
   }
 }
 
 .lineIndicator {
-  width: 24px;
-  height: 3px;
-  border-radius: 2px;
+  width: 32px;
+  height: 4px;
+  border-radius: 0; // Sharp corners
   flex-shrink: 0;
+  border: $border-thin solid rgba(0, 0, 0, 0.3);
 }
 
 .lineName {
@@ -242,16 +255,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.85);
   z-index: calc($z-sidebar + 9);
-  animation: fadeIn $transition-slow ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  animation: none;
 }

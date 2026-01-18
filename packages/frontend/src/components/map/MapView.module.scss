@@ -16,15 +16,18 @@
   z-index: $z-controls;
 
   padding: $spacing-sm $spacing-md;
-  background: $color-bg-secondary;
-  border: 1px solid $color-border;
+  background: $color-bg-primary;
+  border: $border-medium solid $color-border;
   border-radius: $radius-md;
   color: $color-text-primary;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: $font-mono;
   cursor: pointer;
-  transition: all $transition-fast;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: none;
+  box-shadow: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 
   @include tablet {
     bottom: $spacing-md;
@@ -32,20 +35,49 @@
   }
 
   &:hover {
-    background: $color-bg-hover;
+    background: $color-bg-tertiary;
     border-color: $color-accent;
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: none;
+    background: $color-accent;
+    color: $color-bg-primary;
   }
 }
 
+// User marker - square (no compass)
 .userMarker {
-  width: 14px;
-  height: 14px;
-  background: $color-marker-user;
-  border: 2px solid white;
-  border-radius: 50%;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  width: 18px;
+  height: 18px;
+  background: #000000; // Black background
+  border: 3px solid #0099ff; // Blue border
+  border-radius: 0;
+  box-shadow:
+    0 0 0 1px #000000,
+    0 0 12px #0099ff;
+  transition: none;
+}
+
+// User marker - brutalist arrow (with compass)
+.userMarkerArrow {
+  width: 20px;
+  height: 28px;
+  background: #0099ff; // Blue fill
+  border: none;
+  border-radius: 0;
+  clip-path: polygon(
+    50% 0%,     /* Arrow tip */
+    80% 35%,    /* Right shoulder */
+    65% 35%,    /* Right notch outer */
+    65% 100%,   /* Right base */
+    35% 100%,   /* Left base */
+    35% 35%,    /* Left notch outer */
+    20% 35%     /* Left shoulder */
+  );
+  box-shadow:
+    0 0 0 2px #000000,
+    0 0 16px #0099ff;
+  transition: none;
+  will-change: transform; // Optimize for rotation
 }
