@@ -38,6 +38,7 @@ export default function MapSearch({ map }: MapSearchProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const searchTimeout = useRef<NodeJS.Timeout>();
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
 
   useEffect(() => {
     if (query.length < 2) {
@@ -61,6 +62,35 @@ export default function MapSearch({ map }: MapSearchProps) {
       }
     };
   }, [query]);
+
+  useEffect(() => {
+    if (!map) return;
+
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
+
+    results.forEach((result) => {
+      if (result.type === "intent" || !("coordinates" in result)) {
+        return;
+      }
+
+      if (!result.coordinates) {
+        return;
+      }
+
+      const color = result.type === "station" ? "#0ea5e9" : "#7c3aed";
+      const marker = new mapboxgl.Marker({ color })
+        .setLngLat(result.coordinates)
+        .addTo(map);
+
+      markersRef.current.push(marker);
+    });
+
+    return () => {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+    };
+  }, [map, results]);
 
   const performSearch = async (searchQuery: string) => {
     setIsSearching(true);
@@ -105,7 +135,8 @@ export default function MapSearch({ map }: MapSearchProps) {
         aiData.results?.map((result: any, index: number) => ({
           id: result.id || `place-${index}`,
           name: result.name,
-          description: result.description || "Suggested place",
+          description:
+            result.description || result.address || "Suggested place",
           coordinates: result.coordinates
             ? [result.coordinates.longitude, result.coordinates.latitude]
             : undefined,
@@ -132,7 +163,7 @@ export default function MapSearch({ map }: MapSearchProps) {
 
       searchResults.push(...matchingStations);
 
-      const nextResults = searchResults.slice(0, 8);
+      const nextResults = searchResults.slice(0, 20);
       console.log("Map search results:", nextResults);
       setResults(nextResults);
       setShowResults(true);

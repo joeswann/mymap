@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import styles from "./MapView.module.scss";
@@ -13,11 +13,64 @@ interface MapViewProps {
 
 // You'll need to get a free Mapbox token from https://mapbox.com
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
+const DEFAULT_CENTER: [number, number] = [-0.1276, 51.5074];
+const DEFAULT_ZOOM = 12;
 
 export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const mapLoaded = useRef(false);
+  const userMarker = useRef<mapboxgl.Marker | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+
+  const requestUserLocation = (shouldFlyTo: boolean) => {
+    if (!navigator.geolocation) {
+      if (shouldFlyTo && map.current) {
+        map.current.flyTo({
+          center: DEFAULT_CENTER,
+          zoom: DEFAULT_ZOOM,
+          duration: 1200,
+        });
+      }
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        setUserLocation(nextLocation);
+
+        if (shouldFlyTo && map.current) {
+          map.current.flyTo({
+            center: [nextLocation.longitude, nextLocation.latitude],
+            zoom: DEFAULT_ZOOM,
+            duration: 1200,
+          });
+        }
+      },
+      (error) => {
+        console.warn("Geolocation error:", error);
+        if (shouldFlyTo && map.current) {
+          map.current.flyTo({
+            center: DEFAULT_CENTER,
+            zoom: DEFAULT_ZOOM,
+            duration: 1200,
+          });
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60000,
+      }
+    );
+  };
 
   useEffect(() => {
     if (map.current) return; // Initialize map only once
@@ -30,8 +83,8 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/streets-v12",
-      center: [-0.1276, 51.5074], // London coordinates
-      zoom: 12,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
     });
 
     map.current.on("load", () => {
@@ -131,12 +184,34 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
 
       // Load TfL data (in next step)
       loadUndergroundData(map.current);
+
+      // Request user location and center map if available
+      requestUserLocation(true);
     });
 
     return () => {
       map.current?.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (!map.current || !userLocation) return;
+
+    const coordinates: [number, number] = [
+      userLocation.longitude,
+      userLocation.latitude,
+    ];
+
+    if (!userMarker.current) {
+      const markerEl = document.createElement("div");
+      markerEl.className = styles.userMarker;
+      userMarker.current = new mapboxgl.Marker({ element: markerEl })
+        .setLngLat(coordinates)
+        .addTo(map.current);
+    } else {
+      userMarker.current.setLngLat(coordinates);
+    }
+  }, [userLocation]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded.current) return;
@@ -179,7 +254,19 @@ export default function MapView({ visibleLines, onMapLoad }: MapViewProps) {
     }
   }, [visibleLines]);
 
-  return <div ref={mapContainer} className={styles.map} />;
+  return (
+    <div className={styles.mapWrapper}>
+      <div ref={mapContainer} className={styles.map} />
+      <button
+        type="button"
+        className={styles.locateButton}
+        onClick={() => requestUserLocation(true)}
+        aria-label="Recenter map to your location"
+      >
+        Me
+      </button>
+    </div>
+  );
 }
 
 async function loadUndergroundData(map: mapboxgl.Map) {
