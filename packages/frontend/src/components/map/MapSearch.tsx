@@ -454,7 +454,11 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
               )}
               {selectedResult.coordinates && (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${selectedResult.coordinates[1]},${selectedResult.coordinates[0]}`}
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    selectedResult.address
+                      ? `${selectedResult.name}, ${selectedResult.address}`
+                      : selectedResult.name
+                  )}`}
                   target="_blank"
                   rel="noreferrer"
                 >
