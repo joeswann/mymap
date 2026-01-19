@@ -52,14 +52,37 @@
   width: 12px;
   height: 12px;
   border: $border-medium solid $color-border;
-  border-top-color: $color-accent;
   border-radius: 0; // Square spinner, brutalist
-  animation: spin 800ms linear infinite;
+  animation: borderPulse 1000ms linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: translateY(-50%) rotate(360deg);
+@keyframes borderPulse {
+  0% {
+    border-color: $color-border;
+  }
+  20% {
+    border-top-color: $color-accent;
+    border-right-color: $color-border;
+    border-bottom-color: $color-border;
+    border-left-color: $color-border;
+  }
+  40% {
+    border-top-color: $color-accent;
+    border-right-color: $color-accent;
+    border-bottom-color: $color-border;
+    border-left-color: $color-border;
+  }
+  60% {
+    border-top-color: $color-accent;
+    border-right-color: $color-accent;
+    border-bottom-color: $color-accent;
+    border-left-color: $color-border;
+  }
+  80% {
+    border-color: $color-accent;
+  }
+  100% {
+    border-color: $color-border;
   }
 }
 
@@ -207,150 +230,170 @@
   }
 }
 
-.infoPhotoWrap {
-  width: 100%;
-  height: 140px;
-  overflow: hidden;
-  background: $color-bg-tertiary;
+.infoTabs {
+  display: flex;
   border-bottom: $border-medium solid $color-border;
-  position: relative;
+  background: $color-bg-secondary;
+}
 
-  &::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border: $border-thin solid $color-border;
-    pointer-events: none;
+.infoTab {
+  flex: 1;
+  padding: $spacing-sm $spacing-md;
+  background: transparent;
+  border: none;
+  border-right: $border-thin solid $color-border;
+  color: $color-text-secondary;
+  font-size: 11px;
+  font-family: $font-mono;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: none;
+
+  &:last-child {
+    border-right: none;
+  }
+
+  &:hover:not(.active) {
+    background: $color-bg-tertiary;
+    color: $color-text-primary;
   }
 }
 
-.infoPhoto {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.infoTab.active {
+  background: $color-bg-primary;
+  color: $color-accent;
+  border-bottom: $border-medium solid $color-accent;
+  margin-bottom: -2px;
+}
+
+.infoTabContent {
+  display: none;
+}
+
+.infoTabContent.active {
   display: block;
-  filter: contrast(1.1) saturate(0.9);
 }
 
 .infoBody {
   padding: $spacing-md;
   display: flex;
   flex-direction: column;
-  gap: $spacing-sm;
 }
 
 .infoHeader {
-  position: relative;
-  padding-right: 0;
-  border-bottom: $border-thin solid $color-border;
-  padding-bottom: $spacing-sm;
-  margin-bottom: $spacing-xs;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+  margin-bottom: $spacing-sm;
 }
 
 .infoPager {
-  position: absolute;
-  bottom: $spacing-sm;
-  right: $spacing-sm;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  color: $color-text-tertiary;
+  color: $color-text-primary;
   font-size: 10px;
   font-family: $font-mono;
-  z-index: 1;
-  background: $color-bg-primary;
-  padding: 3px 6px;
-  border: $border-thin solid $color-border;
+  background: $color-bg-secondary;
+  padding: $spacing-sm;
+  border-top: $border-thin solid $color-border;
 }
 
 .pagerButton {
-  border: none;
-  background: transparent;
+  border: $border-thin solid $color-border;
+  background: $color-bg-primary;
   color: $color-text-primary;
-  font-size: 12px;
+  font-size: 14px;
   padding: 0;
   cursor: pointer;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: $color-bg-tertiary;
+    border-color: $color-accent;
   }
 
   &:disabled {
     opacity: 0.3;
     cursor: default;
-    background: transparent;
+    background: $color-bg-secondary;
   }
 }
 
 .pagerCount {
-  min-width: 40px;
+  min-width: 50px;
   text-align: center;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 11px;
 }
 
 .infoTitle {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   font-family: $font-system;
   color: $color-text-primary;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-}
-
-.infoMeta {
-  font-size: 11px;
-  font-family: $font-mono;
-  color: $color-text-secondary;
-  line-height: 1.5;
-}
-
-.infoAddress {
-  font-size: 11px;
-  font-family: $font-mono;
-  color: $color-text-secondary;
-  line-height: 1.5;
+  line-height: 1.2;
 }
 
 .infoMetaBadges {
   display: flex;
   gap: $spacing-xs;
   flex-wrap: wrap;
-  margin-top: $spacing-xs;
+  padding-bottom: $spacing-sm;
+}
+
+.infoAddress {
+  font-size: 12px;
+  font-family: $font-mono;
+  color: $color-text-primary;
+  line-height: 1.6;
+  padding: $spacing-sm;
+  background: $color-bg-secondary;
+  border: $border-thin solid $color-border;
+  border-left: $border-medium solid $color-accent;
+  margin-bottom: $spacing-sm;
 }
 
 .infoDescription {
   font-size: 12px;
   font-family: $font-system;
   color: $color-text-primary;
-  line-height: 1.4;
+  line-height: 1.5;
+  padding: $spacing-sm;
+  background: $color-bg-secondary;
   border-left: $border-medium solid $color-accent;
-  padding-left: $spacing-sm;
+  border-top: $border-thin solid $color-border;
+  border-bottom: $border-thin solid $color-border;
+  margin-bottom: $spacing-sm;
 }
 
 .infoLinks {
   display: flex;
-  gap: $spacing-md;
-  border-top: $border-thin solid $color-border;
-  padding-top: $spacing-sm;
+  gap: $spacing-xs;
+  flex-wrap: wrap;
 
   a {
+    flex: 1;
+    min-width: 80px;
     color: $color-accent;
     font-size: 11px;
     font-family: $font-mono;
     text-decoration: none;
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: 0.05em;
-    padding: 4px 8px;
-    border: $border-thin solid $color-accent;
+    padding: 6px 10px;
+    border: $border-medium solid $color-accent;
+    text-align: center;
 
     &:hover {
       background: $color-accent;
@@ -366,19 +409,30 @@
   font-size: 10px;
   font-family: $font-mono;
   color: $color-text-tertiary;
-  border-top: $border-thin solid $color-border;
-  padding-top: $spacing-sm;
+
+  &::before {
+    content: "SOURCES:";
+    font-weight: 700;
+    color: $color-text-tertiary;
+    width: 100%;
+    margin-bottom: $spacing-xs;
+    font-size: 11px;
+  }
 
   a {
     color: $color-text-secondary;
     text-decoration: none;
-    padding: 2px 6px;
+    padding: 4px 8px;
     border: $border-thin solid $color-border;
     background: $color-bg-secondary;
+    text-transform: uppercase;
+    font-weight: 600;
+    font-size: 10px;
 
     &:hover {
       color: $color-text-primary;
       border-color: $color-text-tertiary;
+      background: $color-bg-tertiary;
     }
   }
 }

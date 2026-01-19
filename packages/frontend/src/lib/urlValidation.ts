@@ -69,13 +69,12 @@ export async function verifyUrls(
 }
 
 /**
- * Extract all URLs from a search result (website, photo, sources)
+ * Extract all URLs from a search result (website, sources)
  */
 export function extractResultUrls(result: AiSearchResult): string[] {
   const urls: string[] = [];
 
   if (result.website) urls.push(result.website);
-  if (result.photoUrl) urls.push(result.photoUrl);
 
   // Extract URLs from sources (format: "Name | URL")
   result.sources?.forEach((source) => {
@@ -147,14 +146,6 @@ export async function validateAndCleanResult(
     cleaned.website = undefined;
     if (process.env.NODE_ENV !== "production") {
       console.warn(`Invalid website URL for ${result.name}: ${result.website}`);
-    }
-  }
-
-  // Remove invalid photo URL
-  if (result.photoUrl && !urlValidation.get(result.photoUrl)) {
-    cleaned.photoUrl = undefined;
-    if (process.env.NODE_ENV !== "production") {
-      console.warn(`Invalid photo URL for ${result.name}: ${result.photoUrl}`);
     }
   }
 

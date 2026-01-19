@@ -108,7 +108,6 @@ export const AiResultSchema = z
     name: z.string().min(1, "Name is required"),
     description: z.string().optional(),
     address: z.string().optional(),
-    photoUrl: urlSchema,
     rating: z.number().min(0).max(5).optional(),
     priceRange: z.enum(["low", "medium", "high", "luxury"]).optional(),
     website: urlSchema,

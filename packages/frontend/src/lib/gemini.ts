@@ -20,7 +20,6 @@ interface GeminiRawPayload {
     name: string;
     description?: string;
     address?: string;
-    photoUrl?: string;
     rating?: number;
     priceRange?: "low" | "medium" | "high" | "luxury";
     website?: string;
@@ -33,19 +32,28 @@ interface GeminiRawPayload {
 export const SYSTEM_PROMPT = `
 You are a map search assistant that finds hidden gems and popular spots recommended by real people on Reddit, forums, and review sites.
 
+**CRITICAL LOCATION REQUIREMENTS**:
+- You will receive a viewport center coordinate - this is the user's current location or map focus
+- ALL results MUST be within 15km of the provided coordinates (strict maximum)
+- **STRONGLY PRIORITIZE closer results** - prefer places within 1-5km over places 10-15km away
+- Rank results by distance first - a mediocre place 2km away is better than a great place 12km away
+- ONLY suggest places that are actually near the user's location
+- **AIM FOR AT LEAST 10 RESULTS** - search thoroughly within the 15km radius to find enough options
+- If you have fewer than 10 results, expand your search within the 15km limit before finalizing
+
 Guidelines:
 - Extract the user's search intent and filters.
-- If the user provides a location (area or coordinates), include it.
 - **PRIORITIZE places with strong community recommendations** from Reddit, local forums, and review sites.
 - Only include real companies/places you are confident exist and can cite from actual sources.
-- Provide up to 10 suggested places, ranked by:
-  1. Strength of community recommendations (Reddit upvotes, forum mentions)
-  2. Recency of mentions (prefer recommendations from last 1-2 years)
-  3. Geographic relevance to user location
-- Use the viewport center as the reference and keep results within ~10km.
+- **Try to provide 10 suggested places** (minimum 5, maximum 10), ranked by:
+  1. Geographic proximity to user location (MOST IMPORTANT - prioritize 1-5km over 10-15km)
+  2. Strength of community recommendations (Reddit upvotes, forum mentions)
+  3. Recency of mentions (prefer recommendations from last 1-2 years)
+  4. Quality (rating, amenities) - only as a tiebreaker
+- If struggling to find 10 results, broaden the criteria slightly while staying within 15km
 - Include a street address or full place address for every result.
 - Include a short description that mentions why it's recommended (e.g., "Reddit favorite for authentic ramen").
-- Include rating (0-5), website, phone, and a photo URL if available.
+- Include rating (0-5), website, and phone if available.
 - If available, include a priceRange as one of: low, medium, high, luxury.
 
 **SOURCE REQUIREMENTS (CRITICAL)**:
@@ -60,16 +68,15 @@ Guidelines:
 **URL VALIDATION RULES**:
 - All website URLs must be fully qualified (start with http:// or https://)
 - All source URLs must point to actual pages/threads, not homepages
-- Only include photoUrl values that are publicly accessible direct image URLs (no auth required)
 - Prefer direct links to Reddit threads/comments over r/subreddit links
 - Ensure any website/source links are valid, working URLs that you are confident exist
 
 **OUTPUT FORMAT**:
 - Do not include coordinates; the server will geocode addresses.
-- Use the viewport center only for relevance; do not include it in output.
+- REMEMBER: All results must be within 15km of viewport center, with closer results ranked higher
 - Keep descriptions concise and useful (1 sentence).
 - Respond with ONLY valid JSON that matches the tool schema exactly.
-- Use camelCase keys only (e.g., "photoUrl", "parsedQuery", "searchTerm").
+- Use camelCase keys only (e.g., "parsedQuery", "searchTerm").
 - Do not use keys like "searchIntent" or "suggestedPlaces"; use "parsedQuery" and "results".
 
 **Example output**:
@@ -88,7 +95,6 @@ Guidelines:
       "priceRange": "medium",
       "website": "https://stickyrice.co.uk",
       "phone": "+44 20 1234 5678",
-      "photoUrl": "https://stickyrice.co.uk/photos/interior.jpg",
       "sources": [
         "Reddit r/london | https://reddit.com/r/london/comments/xyz123/best_thai_restaurants",
         "TimeOut London | https://timeout.com/london/restaurants/sticky-rice"
@@ -172,7 +178,6 @@ export const TOOL_SCHEMA = {
             name: { type: "STRING" },
             description: { type: "STRING" },
             address: { type: "STRING" },
-            photoUrl: { type: "STRING" },
             rating: { type: "NUMBER" },
             priceRange: {
               type: "STRING",
@@ -218,13 +223,18 @@ export async function callGeminiTool(payload: {
     "SYSTEM:",
     SYSTEM_PROMPT.trim(),
     "",
+    payload.userLocation
+      ? `**SEARCH LOCATION (CRITICAL)**: ${payload.userLocation.latitude}, ${payload.userLocation.longitude}`
+      : "",
+    payload.userLocationAddress
+      ? `Location address: ${payload.userLocationAddress}`
+      : "",
+    "",
     "USER QUERY:",
     payload.query,
-    payload.userLocationAddress
-      ? `User location address: ${payload.userLocationAddress}`
-      : "",
+    "",
     payload.userLocation
-      ? `Viewport center: ${payload.userLocation.latitude}, ${payload.userLocation.longitude}`
+      ? "IMPORTANT: All results must be within 15km of the search location above. Prioritize closer results (1-5km) over distant ones (10-15km). Aim for at least 10 results."
       : "",
   ]
     .filter(Boolean)
@@ -324,7 +334,6 @@ export function normalizeGeminiPayload(
     name: place.name,
     description: place.description,
     address: place.address,
-    photoUrl: place.photoUrl,
     rating: typeof place.rating === "number" ? place.rating : undefined,
     priceRange: place.priceRange,
     website: place.website,

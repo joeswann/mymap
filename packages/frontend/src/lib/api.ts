@@ -50,7 +50,8 @@ export async function fetchUndergroundStations(
  */
 export async function fetchSearch(
   query: string,
-  location?: Coordinates
+  location?: Coordinates,
+  signal?: AbortSignal
 ): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query });
 
@@ -59,7 +60,7 @@ export async function fetchSearch(
     params.set("lng", String(location.longitude));
   }
 
-  const response = await fetch(`/api/search?${params}`);
+  const response = await fetch(`/api/search?${params}`, { signal });
 
   if (!response.ok) {
     throw new Error(

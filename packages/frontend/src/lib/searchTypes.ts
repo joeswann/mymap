@@ -35,7 +35,6 @@ export type AiSearchResult = {
   name: string;
   description?: string;
   address?: string;
-  photoUrl?: string;
   rating?: number;
   priceRange?: "low" | "medium" | "high" | "luxury";
   website?: string;
@@ -73,7 +72,6 @@ export type SearchResult =
       coordinates?: [number, number];
       type: "place";
       address?: string;
-      photoUrl?: string;
       rating?: number;
       priceRange?: "low" | "medium" | "high" | "luxury";
       website?: string;

@@ -5,7 +5,7 @@ export const DEFAULT_ZOOM = 12;
 // Search configuration
 export const SEARCH_DEBOUNCE_MS = 300;
 export const RESULT_LIMIT = 20;
-export const SEARCH_RADIUS_KM = 20;
+export const SEARCH_RADIUS_KM = 15;
 
 // Geolocation configuration
 export const GEOLOCATION_TIMEOUT_MS = 8000;

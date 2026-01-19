@@ -27,12 +27,13 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(
     null,
   );
-  const [photoFailed, setPhotoFailed] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [activeTab, setActiveTab] = useState<"info" | "details">("info");
   const markersRef = useRef<any[]>([]); // Use any[] for mapbox markers
   const emptyStateQueryRef = useRef<string | null>(null);
   const latestSearchId = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const cacheRef = useRef(
     new Map<string, { results: SearchResult[]; intent: SearchResult | null }>(),
   );
@@ -78,16 +79,18 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
     searchQuery: string,
     cacheKey: string,
     searchId: number,
+    signal: AbortSignal,
   ) => {
     try {
-      const userLocation = map
+      // Use actual user GPS location if available, otherwise use map center
+      const searchLocation = userLocation || (map
         ? { latitude: map.getCenter().lat, longitude: map.getCenter().lng }
-        : undefined;
+        : undefined);
 
       // Fetch both stations and AI search in parallel
       const [stationsData, aiData] = await Promise.all([
-        fetchUndergroundStations(),
-        fetchSearch(searchQuery, userLocation),
+        fetchUndergroundStations(signal),
+        fetchSearch(searchQuery, searchLocation, signal),
       ]);
 
       const intent: SearchResult = {
@@ -117,7 +120,6 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
         name: result.name,
         description: result.description || result.address || "Suggested place",
         address: result.address,
-        photoUrl: result.photoUrl,
         rating: result.rating,
         priceRange: result.priceRange,
         website: result.website,
@@ -171,6 +173,10 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
         emptyStateQueryRef.current = cacheKey;
       }
     } catch (error) {
+      // Ignore AbortError - this is expected when canceling searches
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
       console.error("Search error:", error);
     } finally {
       if (searchId === latestSearchId.current) {
@@ -204,8 +210,17 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
   };
 
   useEffect(() => {
-    setPhotoFailed(false);
+    setActiveTab("info");
   }, [selectedResult?.id]);
+
+  // Cleanup: abort pending search on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   return (
     <div className={styles.search}>
@@ -222,21 +237,32 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
             return;
           }
 
+          // Abort any pending search request
+          if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+          }
+
           const cached = cacheRef.current.get(cacheKey);
           if (cached) {
             setResults(cached.results);
             setIntentResult(cached.intent);
             setShowResults(true);
             setSelectedResult(null);
+            return;
           }
 
+          // Clear results when starting a new search
+          setResults([]);
+          setIntentResult(null);
           emptyStateQueryRef.current = null;
           setIsSearching(true);
           setShowResults(true);
           setSelectedResult(null);
 
+          // Create new AbortController for this search
+          abortControllerRef.current = new AbortController();
           const searchId = ++latestSearchId.current;
-          performSearch(trimmedQuery, cacheKey, searchId);
+          performSearch(trimmedQuery, cacheKey, searchId, abortControllerRef.current.signal);
         }}
       >
         <input
@@ -388,161 +414,185 @@ export default function MapSearch({ map, userLocation }: MapSearchProps) {
 
       {selectedResult?.type === "place" && (
         <div className={styles.infoCard}>
-          {selectedResult.photoUrl && !photoFailed && (
-            <div className={styles.infoPhotoWrap}>
-              <img
-                src={selectedResult.photoUrl}
-                alt={selectedResult.name}
-                className={styles.infoPhoto}
-                onError={() => setPhotoFailed(true)}
-              />
-            </div>
-          )}
+          <div className={styles.infoTabs}>
+            <button
+              type="button"
+              className={classNames(styles.infoTab, {
+                [styles.active]: activeTab === "info",
+              })}
+              onClick={() => setActiveTab("info")}
+            >
+              Info
+            </button>
+            <button
+              type="button"
+              className={classNames(styles.infoTab, {
+                [styles.active]: activeTab === "details",
+              })}
+              onClick={() => setActiveTab("details")}
+            >
+              Details
+            </button>
+          </div>
           <div className={styles.infoBody}>
-            <div className={styles.infoHeader}>
-              <div className={styles.infoTitle}>{selectedResult.name}</div>
-            </div>
-            {selectedResult.address && (
-              <div className={styles.infoAddress}>{selectedResult.address}</div>
-            )}
-            {(typeof selectedResult.rating === "number" ||
-              selectedResult.priceRange ||
-              (userLocation && selectedResult.coordinates)) && (
-              <div className={styles.infoMetaBadges}>
-                {userLocation && selectedResult.coordinates && (
-                  <span className={styles.metaBadge}>
-                    {getDistanceKm(userLocation, {
-                      latitude: selectedResult.coordinates[1],
-                      longitude: selectedResult.coordinates[0],
-                    }).toFixed(1)}
-                    km
-                  </span>
-                )}
-                {typeof selectedResult.rating === "number" && (
-                  <span className={styles.metaBadge}>
-                    ★{selectedResult.rating.toFixed(1)}
-                  </span>
-                )}
-                {selectedResult.priceRange && (
-                  <span className={styles.metaBadge}>
-                    £{selectedResult.priceRange}
-                  </span>
+            <div
+              className={classNames(styles.infoTabContent, {
+                [styles.active]: activeTab === "info",
+              })}
+            >
+              <div className={styles.infoHeader}>
+                <div className={styles.infoTitle}>{selectedResult.name}</div>
+                {(typeof selectedResult.rating === "number" ||
+                  selectedResult.priceRange ||
+                  (userLocation && selectedResult.coordinates)) && (
+                  <div className={styles.infoMetaBadges}>
+                    {userLocation && selectedResult.coordinates && (
+                      <span className={styles.metaBadge}>
+                        {getDistanceKm(userLocation, {
+                          latitude: selectedResult.coordinates[1],
+                          longitude: selectedResult.coordinates[0],
+                        }).toFixed(1)}
+                        km
+                      </span>
+                    )}
+                    {typeof selectedResult.rating === "number" && (
+                      <span className={styles.metaBadge}>
+                        ★{selectedResult.rating.toFixed(1)}
+                      </span>
+                    )}
+                    {selectedResult.priceRange && (
+                      <span className={styles.metaBadge}>
+                        £{selectedResult.priceRange}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-            {selectedResult.description && (
-              <div className={styles.infoDescription}>
-                {selectedResult.description}
-              </div>
-            )}
-            <div className={styles.infoLinks}>
-              {selectedResult.website && (
-                <a
-                  href={
-                    /^https?:\/\//i.test(selectedResult.website)
-                      ? selectedResult.website
-                      : `https://${selectedResult.website}`
-                  }
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Website
-                </a>
-              )}
-              {selectedResult.phone && (
-                <a href={`tel:${selectedResult.phone}`}>Call</a>
-              )}
-              {selectedResult.coordinates && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    selectedResult.address
-                      ? `${selectedResult.name}, ${selectedResult.address}`
-                      : selectedResult.name
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Maps
-                </a>
-              )}
-            </div>
-            {selectedResult.sources && selectedResult.sources.length > 0 && (
-              <div className={styles.infoSources}>
-                {selectedResult.sources.map((source, index) => {
-                  const trimmed = source.trim();
-                  let label = trimmed;
-                  let href = trimmed;
-                  if (trimmed.includes("|")) {
-                    const [name, url] = trimmed
-                      .split("|", 2)
-                      .map((part) => part.trim());
-                    label = name || trimmed;
-                    href = url || trimmed;
-                  } else if (trimmed.includes(" - ")) {
-                    const [name, url] = trimmed
-                      .split(" - ", 2)
-                      .map((part) => part.trim());
-                    label = name || trimmed;
-                    href = url || trimmed;
-                  }
-                  if (!/^https?:\/\//i.test(href)) {
-                    href = `https://${href}`;
-                  }
-                  return (
-                    <a
-                      key={`${trimmed}-${index}`}
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {label}
-                    </a>
-                  );
-                })}
-              </div>
-            )}
-            {(() => {
-              const placeResults = results.filter(
-                (result) => result.type === "place",
-              );
-              const currentIndex = placeResults.findIndex(
-                (result) => result.id === selectedResult.id,
-              );
-              const total = placeResults.length;
-              if (total <= 1 || currentIndex === -1) {
-                return null;
-              }
-              const goToIndex = (nextIndex: number) => {
-                const next = placeResults[nextIndex];
-                if (!next || !next.coordinates) return;
-                handleSelectResult(next);
-              };
-              return (
-                <div className={styles.infoPager}>
-                  <button
-                    type="button"
-                    className={styles.pagerButton}
-                    onClick={() => goToIndex(currentIndex - 1)}
-                    disabled={currentIndex === 0}
-                    aria-label="Previous result"
-                  >
-                    ‹
-                  </button>
-                  <span className={styles.pagerCount}>
-                    {currentIndex + 1}/{total}
-                  </span>
-                  <button
-                    type="button"
-                    className={styles.pagerButton}
-                    onClick={() => goToIndex(currentIndex + 1)}
-                    disabled={currentIndex === total - 1}
-                    aria-label="Next result"
-                  >
-                    ›
-                  </button>
+              {selectedResult.description && (
+                <div className={styles.infoDescription}>
+                  {selectedResult.description}
                 </div>
-              );
-            })()}
+              )}
+              <div className={styles.infoLinks}>
+                {selectedResult.website && (
+                  <a
+                    href={
+                      /^https?:\/\//i.test(selectedResult.website)
+                        ? selectedResult.website
+                        : `https://${selectedResult.website}`
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Website
+                  </a>
+                )}
+                {selectedResult.phone && (
+                  <a href={`tel:${selectedResult.phone}`}>Call</a>
+                )}
+                {selectedResult.coordinates && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      selectedResult.address
+                        ? `${selectedResult.name}, ${selectedResult.address}`
+                        : selectedResult.name
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Maps
+                  </a>
+                )}
+              </div>
+              {(() => {
+                const placeResults = results.filter(
+                  (result) => result.type === "place",
+                );
+                const currentIndex = placeResults.findIndex(
+                  (result) => result.id === selectedResult.id,
+                );
+                const total = placeResults.length;
+                if (total <= 1 || currentIndex === -1) {
+                  return null;
+                }
+                const goToIndex = (nextIndex: number) => {
+                  const next = placeResults[nextIndex];
+                  if (!next || !next.coordinates) return;
+                  handleSelectResult(next);
+                };
+                return (
+                  <div className={styles.infoPager}>
+                    <button
+                      type="button"
+                      className={styles.pagerButton}
+                      onClick={() => goToIndex(currentIndex - 1)}
+                      disabled={currentIndex === 0}
+                      aria-label="Previous result"
+                    >
+                      ‹
+                    </button>
+                    <span className={styles.pagerCount}>
+                      {currentIndex + 1}/{total}
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.pagerButton}
+                      onClick={() => goToIndex(currentIndex + 1)}
+                      disabled={currentIndex === total - 1}
+                      aria-label="Next result"
+                    >
+                      ›
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+            <div
+              className={classNames(styles.infoTabContent, {
+                [styles.active]: activeTab === "details",
+              })}
+            >
+              {selectedResult.address && (
+                <div className={styles.infoAddress}>
+                  {selectedResult.address}
+                </div>
+              )}
+              {selectedResult.sources && selectedResult.sources.length > 0 && (
+                <div className={styles.infoSources}>
+                  {selectedResult.sources.map((source, index) => {
+                    const trimmed = source.trim();
+                    let label = trimmed;
+                    let href = trimmed;
+                    if (trimmed.includes("|")) {
+                      const [name, url] = trimmed
+                        .split("|", 2)
+                        .map((part) => part.trim());
+                      label = name || trimmed;
+                      href = url || trimmed;
+                    } else if (trimmed.includes(" - ")) {
+                      const [name, url] = trimmed
+                        .split(" - ", 2)
+                        .map((part) => part.trim());
+                      label = name || trimmed;
+                      href = url || trimmed;
+                    }
+                    if (!/^https?:\/\//i.test(href)) {
+                      href = `https://${href}`;
+                    }
+                    return (
+                      <a
+                        key={`${trimmed}-${index}`}
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {label}
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
